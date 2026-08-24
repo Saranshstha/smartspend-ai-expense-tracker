@@ -1,3 +1,7 @@
+# ==========================================
+# IMPORT REQUIRED LIBRARIES
+# ==========================================
+
 import pandas as pd
 import pickle
 
@@ -6,136 +10,86 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 
-# Sample expense data
-data = [
+# ==========================================
+# LOAD TRAINING DATA
+# ==========================================
 
-    # Food
-    ("lunch at restaurant", "Food"),
-    ("dinner at cafe", "Food"),
-    ("pizza", "Food"),
-    ("burger and fries", "Food"),
-    ("breakfast at cafe", "Food"),
-    ("grocery shopping", "Food"),
-    ("milk and bread", "Food"),
-    ("buy vegetables", "Food"),
-    ("chicken and rice", "Food"),
-    ("coffee and snacks", "Food"),
-    ("restaurant meal", "Food"),
-    ("lunch at college", "Food"),
-    ("buy fruits", "Food"),
-    ("dinner with friends", "Food"),
-    ("fast food", "Food"),
-    ("buy groceries", "Food"),
+# Read the expense descriptions and their categories
+# from the CSV file used to train the machine learning model.
 
-    # Transport
-    ("bus ticket", "Transport"),
-    ("taxi to college", "Transport"),
-    ("uber ride", "Transport"),
-    ("bus fare", "Transport"),
-    ("fuel for car", "Transport"),
-    ("petrol", "Transport"),
-    ("taxi ride", "Transport"),
-    ("ride to university", "Transport"),
-    ("public bus", "Transport"),
-    ("transport fare", "Transport"),
-    ("motorbike fuel", "Transport"),
-    ("cab to home", "Transport"),
-    ("bus to college", "Transport"),
-    ("travel fare", "Transport"),
-    ("car fuel", "Transport"),
-    ("ride sharing", "Transport"),
-
-    # Education
-    ("python programming book", "Education"),
-    ("college tuition", "Education"),
-    ("university fee", "Education"),
-    ("buy textbook", "Education"),
-    ("online programming course", "Education"),
-    ("exam fee", "Education"),
-    ("notebook for college", "Education"),
-    ("buy stationery", "Education"),
-    ("coding course", "Education"),
-    ("study materials", "Education"),
-    ("college books", "Education"),
-    ("learning course", "Education"),
-    ("school supplies", "Education"),
-    ("programming tutorial", "Education"),
-    ("academic book", "Education"),
-    ("education fee", "Education"),
-
-    # Entertainment
-    ("movie ticket", "Entertainment"),
-    ("netflix subscription", "Entertainment"),
-    ("concert ticket", "Entertainment"),
-    ("gaming subscription", "Entertainment"),
-    ("video game", "Entertainment"),
-    ("cinema", "Entertainment"),
-    ("movie with friends", "Entertainment"),
-    ("spotify subscription", "Entertainment"),
-    ("game purchase", "Entertainment"),
-    ("bowling", "Entertainment"),
-    ("arcade", "Entertainment"),
-    ("music subscription", "Entertainment"),
-    ("movie night", "Entertainment"),
-    ("entertainment ticket", "Entertainment"),
-    ("game subscription", "Entertainment"),
-    ("watching movie", "Entertainment"),
-
-    # Shopping
-    ("new shirt", "Shopping"),
-    ("buy shoes", "Shopping"),
-    ("new jeans", "Shopping"),
-    ("clothes shopping", "Shopping"),
-    ("buy backpack", "Shopping"),
-    ("new headphones", "Shopping"),
-    ("buy keyboard", "Shopping"),
-    ("new mouse", "Shopping"),
-    ("shopping mall", "Shopping"),
-    ("buy jacket", "Shopping"),
-    ("buy clothes", "Shopping"),
-    ("new bag", "Shopping"),
-    ("buy watch", "Shopping"),
-    ("new t shirt", "Shopping"),
-    ("online shopping", "Shopping"),
-    ("buy accessories", "Shopping"),
-]
+df = pd.read_csv("data/expenses_training.csv")
 
 
-# Convert data into a DataFrame
-df = pd.DataFrame(
-    data,
-    columns=["description", "category"]
-)
+# ==========================================
+# CREATE MACHINE LEARNING PIPELINE
+# ==========================================
 
+# TF-IDF converts expense descriptions into numerical
+# features that the machine learning algorithm can understand.
+#
+# ngram_range=(1, 2) allows the model to learn both
+# individual words and two-word phrases such as:
+# "movie ticket", "bus fare", and "sports shoes".
 
-# Save the dataset as CSV
-df.to_csv("expenses.csv", index=False)
+# Logistic Regression is used to classify each expense
+# description into one of the predefined expense categories.
 
-
-# Create the machine learning pipeline
 model = Pipeline([
-    ("tfidf", TfidfVectorizer()),
-    ("classifier", LogisticRegression(max_iter=1000))
+    (
+        "tfidf",
+        TfidfVectorizer(
+            ngram_range=(1, 2),
+            lowercase=True,
+            sublinear_tf=True
+        )
+    ),
+    (
+        "classifier",
+        LogisticRegression(
+            max_iter=1000
+        )
+    )
 ])
 
 
-# Train the model
+# ==========================================
+# TRAIN THE MODEL
+# ==========================================
+
+# Train the machine learning pipeline using:
+# - description as the input feature
+# - category as the target label
+
 model.fit(
     df["description"],
     df["category"]
 )
 
 
-# Save the trained model
+# ==========================================
+# SAVE THE TRAINED MODEL
+# ==========================================
+
+# Save the trained model as a pickle file.
+# FastAPI will load this file later when the API starts.
+
 with open("model.pkl", "wb") as file:
-    pickle.dump(model, file)
+
+    pickle.dump(
+        model,
+        file
+    )
 
 
-print("Dataset created successfully.")
-print("AI model trained successfully.")
-print("Model saved as model.pkl")
+# ==========================================
+# DISPLAY TRAINING INFORMATION
+# ==========================================
+
+# Print basic information so we can confirm that
+# the training process completed successfully.
+
+print("Model trained successfully.")
+print("Training records:", len(df))
 print()
-print("Number of training records:", len(df))
-print()
-print("Categories:")
+print("Category distribution:")
 print(df["category"].value_counts())

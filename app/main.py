@@ -1,3 +1,4 @@
+#uvicorn app.main:app --reload
 from pathlib import Path
 import pickle
 import sqlite3

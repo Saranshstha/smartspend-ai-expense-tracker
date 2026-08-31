@@ -212,7 +212,6 @@ pens and pencils,Education
 school stationery,Education
 college stationery,Education
 stationery items,Education
-school backpack,Education
 college supplies,Education
 lab fee,Education
 laboratory fee,Education
@@ -338,3 +337,413 @@ sports equipment,Shopping
 buy sports equipment,Shopping
 gym equipment,Shopping
 buy gym equipment,Shopping
+tea and biscuits,Food
+black tea,Food
+milk tea,Food
+lemon tea,Food
+hot lemon,Food
+lemon drink,Food
+fresh juice,Food
+orange juice,Food
+mango juice,Food
+fruit shake,Food
+milkshake,Food
+smoothie,Food
+lassi,Food
+yogurt,Food
+curd,Food
+cheese,Food
+butter,Food
+jam,Food
+cereal,Food
+oats,Food
+cornflakes,Food
+instant noodles,Food
+samosa,Food
+pakora,Food
+chicken wings,Food
+fried chicken,Food
+chicken burger,Food
+cheese burger,Food
+french fries,Food
+garlic bread,Food
+pancakes,Food
+waffles,Food
+omelette,Food
+boiled eggs,Food
+egg curry,Food
+chicken curry,Food
+mutton curry,Food
+fish curry,Food
+fish and rice,Food
+dal rice,Food
+thali set,Food
+nepali thali,Food
+newari food,Food
+chatpate,Food
+pani puri,Food
+sekuwa,Food
+choila,Food
+sel roti,Food
+yomari,Food
+thukpa noodles,Food
+chowmein lunch,Food
+momo lunch,Food
+momo dinner,Food
+vegetable momo,Food
+chicken chowmein,Food
+veg fried rice,Food
+chicken fried rice,Food
+restaurant breakfast,Food
+cafe breakfast,Food
+coffee and cake,Food
+tea and cake,Food
+snack from cafe,Food
+canteen lunch,Food
+college canteen food,Food
+office lunch,Food
+office snacks,Food
+meal delivery,Food
+food order,Food
+food delivery app,Food
+ordered dinner,Food
+ordered lunch,Food
+takeout,Food
+takeaway dinner,Food
+home groceries,Food
+weekly groceries,Food
+monthly groceries,Food
+vegetable market,Food
+fruit market,Food
+rice for home,Food
+flour,Food
+cooking ingredients,Food
+salt and spices,Food
+sugar and tea,Food
+eggs and milk,Food
+meat from butcher,Food
+chicken from market,Food
+fish from market,Food
+snacks,Food
+evening snacks,Food
+late night snacks,Food
+bus ride to college,Transport
+bus ride to work,Transport
+bus ride home,Transport
+local bus ticket,Transport
+microbus fare,Transport
+micro bus,Transport
+tempo fare,Transport
+tempo ride,Transport
+electric bus fare,Transport
+public bus ticket,Transport
+taxi ride home,Transport
+taxi ride to college,Transport
+taxi ride to work,Transport
+taxi fare,Transport
+cab to airport,Transport
+cab to college,Transport
+cab to office,Transport
+uber ride home,Transport
+uber fare,Transport
+ride app fare,Transport
+pathao ride,Transport
+pathao to college,Transport
+pathao to work,Transport
+bike taxi,Transport
+bike ride fare,Transport
+motorcycle fuel,Transport
+petrol refill,Transport
+petrol station,Transport
+diesel refill,Transport
+fuel for motorcycle,Transport
+fuel for scooter,Transport
+scooter petrol,Transport
+car petrol refill,Transport
+car diesel,Transport
+vehicle fuel,Transport
+electric vehicle charging,Transport
+parking at mall,Transport
+parking at college,Transport
+parking ticket,Transport
+highway toll,Transport
+toll payment,Transport
+road tax,Transport
+vehicle tax,Transport
+driving license fee,Transport
+license renewal,Transport
+vehicle registration,Transport
+car servicing,Transport
+motorbike servicing,Transport
+scooter servicing,Transport
+oil change for car,Transport
+engine oil,Transport
+car maintenance,Transport
+motorcycle repair,Transport
+scooter repair,Transport
+new tyre,Transport
+car tyre,Transport
+bike tyre,Transport
+puncture repair,Transport
+car wash,Transport
+motorbike wash,Transport
+train fare,Transport
+train ticket home,Transport
+flight booking,Transport
+air ticket,Transport
+airfare,Transport
+airport shuttle,Transport
+tour bus,Transport
+monthly transport pass,Transport
+travel card,Transport
+public transport pass,Transport
+rickshaw fare,Transport
+rickshaw ride,Transport
+auto rickshaw,Transport
+shared ride,Transport
+carpool fare,Transport
+ride to airport,Transport
+ride to station,Transport
+travel by train,Transport
+travel by plane,Transport
+commute fare,Transport
+daily commute,Transport
+commuting cost,Transport
+fuel expense,Transport
+python course,Education
+java course,Education
+c++ course,Education
+javascript course,Education
+web development course,Education
+data analytics course,Education
+data science course,Education
+machine learning course,Education
+artificial intelligence course,Education
+deep learning course,Education
+cybersecurity course,Education
+cloud computing course,Education
+database course,Education
+sql course,Education
+programming class,Education
+coding class,Education
+online coding course,Education
+online university course,Education
+online class,Education
+course enrollment fee,Education
+course registration,Education
+college admission fee,Education
+university admission fee,Education
+admission fee,Education
+semester registration,Education
+semester tuition,Education
+monthly tuition,Education
+tuition fee,Education
+school tuition,Education
+college tuition payment,Education
+student registration fee,Education
+exam registration,Education
+exam fee payment,Education
+test fee,Education
+entrance exam fee,Education
+certification exam,Education
+professional certification,Education
+online certificate course,Education
+course certificate,Education
+programming certification,Education
+study book,Education
+textbook purchase,Education
+python book,Education
+java book,Education
+sql textbook,Education
+statistics book,Education
+economics textbook,Education
+business textbook,Education
+physics textbook,Education
+chemistry textbook,Education
+biology textbook,Education
+computer science textbook,Education
+college notebook,Education
+school notebook,Education
+pens for class,Education
+pencils for class,Education
+erasers and pens,Education
+calculator for class,Education
+scientific calculator,Education
+geometry set,Education
+lab fee,Education
+lab practical fee,Education
+laboratory supplies,Education
+library membership,Education
+library subscription,Education
+library fine,Education
+academic research paper,Education
+research subscription,Education
+journal subscription,Education
+revision guide,Education
+exam guide,Education
+exam preparation,Education
+tuition class,Education
+private tuition,Education
+language learning class,Education
+english tuition,Education
+math tuition,Education
+computer class,Education
+college project materials,Education
+academic project,Education
+university project,Education
+student supplies,Education
+cinema booking,Entertainment
+cinema night,Entertainment
+film at cinema,Entertainment
+movie streaming,Entertainment
+netflix plan,Entertainment
+youtube premium,Entertainment
+streaming subscription,Entertainment
+music streaming,Entertainment
+apple music subscription,Entertainment
+concert booking,Entertainment
+live music,Entertainment
+music festival,Entertainment
+festival pass,Entertainment
+event pass,Entertainment
+event booking,Entertainment
+theatre ticket,Entertainment
+theater ticket,Entertainment
+stage show,Entertainment
+live performance,Entertainment
+comedy night,Entertainment
+comedy show,Entertainment
+karaoke night,Entertainment
+karaoke booking,Entertainment
+bowling,Entertainment
+bowling alley,Entertainment
+arcade credits,Entertainment
+theme park,Entertainment
+theme park entry,Entertainment
+amusement park,Entertainment
+water park,Entertainment
+water park entry,Entertainment
+zoo ticket,Entertainment
+gaming pass,Entertainment
+playstation subscription,Entertainment
+xbox subscription,Entertainment
+steam game,Entertainment
+pc game,Entertainment
+mobile game,Entertainment
+game credits,Entertainment
+in game purchase,Entertainment
+gaming top up,Entertainment
+online game subscription,Entertainment
+weekend movie,Entertainment
+entertainment event,Entertainment
+sports match ticket,Entertainment
+football match ticket,Entertainment
+cricket match ticket,Entertainment
+basketball game ticket,Entertainment
+live sports event,Entertainment
+watching a show,Entertainment
+watching a movie,Entertainment
+music event ticket,Entertainment
+concert with friends,Entertainment
+festival with friends,Entertainment
+streaming service,Entertainment
+video streaming plan,Entertainment
+music app plan,Entertainment
+gaming cafe,Entertainment
+gaming cafe session,Entertainment
+pool game,Entertainment
+snooker,Entertainment
+escape room,Entertainment
+escape room ticket,Entertainment
+fun park ticket,Entertainment
+entertainment subscription,Entertainment
+movie rental,Entertainment
+digital movie rental,Entertainment
+online movie rental,Entertainment
+show booking,Entertainment
+stand up comedy,Entertainment
+live comedy show,Entertainment
+new trousers,Shopping
+new pants,Shopping
+new hoodie,Shopping
+new sweater,Shopping
+new coat,Shopping
+new dress,Shopping
+new clothes,Shopping
+new sandals,Shopping
+new wallet,Shopping
+new purse,Shopping
+new handbag,Shopping
+new sunglasses,Shopping
+wireless earbuds,Shopping
+buy speakers,Shopping
+bluetooth speaker,Shopping
+mechanical keyboard,Shopping
+computer mouse,Shopping
+monitor purchase,Shopping
+computer monitor,Shopping
+phone case,Shopping
+mobile phone accessories,Shopping
+phone charger,Shopping
+laptop bag,Shopping
+buy laptop accessories,Shopping
+buy camera accessories,Shopping
+new camera,Shopping
+shopping online,Shopping
+online clothes order,Shopping
+online product order,Shopping
+order from online store,Shopping
+shopping at mall,Shopping
+shopping for accessories,Shopping
+buy jewelry,Shopping
+buy accessories online,Shopping
+new sports jersey,Shopping
+football jersey,Shopping
+cricket jersey,Shopping
+football,Shopping
+cricket bat,Shopping
+cricket ball,Shopping
+basketball,Shopping
+basketball shoes,Shopping
+tennis racket,Shopping
+badminton racket,Shopping
+sports equipment,Shopping
+buy sports equipment,Shopping
+gym equipment,Shopping
+buy gym equipment,Shopping
+new tablet,Shopping
+new laptop,Shopping
+new phone,Shopping
+smartphone purchase,Shopping
+mobile phone purchase,Shopping
+computer purchase,Shopping
+new printer,Shopping
+printer purchase,Shopping
+usb drive,Shopping
+external hard drive,Shopping
+power bank,Shopping
+phone charger cable,Shopping
+laptop charger,Shopping
+computer accessories,Shopping
+desk lamp,Shopping
+room decoration,Shopping
+home decoration,Shopping
+new curtains,Shopping
+new bedsheet,Shopping
+new blanket,Shopping
+new pillow,Shopping
+kitchen utensils,Shopping
+cooking utensils,Shopping
+water bottle,Shopping
+thermos bottle,Shopping
+school uniform,Shopping
+college uniform,Shopping
+new belt,Shopping
+new tie,Shopping
+new cap,Shopping
+product purchase,Shopping
+clothing purchase,Shopping
+accessory purchase,Shopping
+electronic purchase,Shopping
+college backpack, Shopping
+gaming keyboard, Shopping

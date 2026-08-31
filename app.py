@@ -1,5 +1,5 @@
+#streamlit run app.py
 import os
-
 import pandas as pd
 import requests
 import streamlit as st
@@ -310,6 +310,22 @@ API_URL = os.getenv(
 if "prediction_result" not in st.session_state:
     st.session_state.prediction_result = None
 
+if "clear_inputs" not in st.session_state:
+    st.session_state.clear_inputs = False
+
+
+# ==========================================
+# CLEAR INPUTS AFTER SUCCESSFUL PREDICTION
+# ==========================================
+
+if st.session_state.clear_inputs:
+
+    st.session_state.description_input = ""
+
+    st.session_state.amount_input = 0.0
+
+    st.session_state.clear_inputs = False
+
 
 # ==========================================
 # API FUNCTIONS
@@ -527,14 +543,16 @@ with input_col:
 
     description = st.text_input(
         "Description",
-        placeholder="e.g. Lunch at a restaurant"
+        placeholder="e.g. Lunch at a restaurant",
+        key="description_input"
     )
 
     amount = st.number_input(
         "Amount (Rs.)",
         min_value=0.0,
         step=50.0,
-        format="%.2f"
+        format="%.2f",
+        key="amount_input"
     )
 
     predict_clicked = st.button(
@@ -609,7 +627,13 @@ if predict_clicked:
 
         else:
 
+            # Save the latest prediction
+            # so it remains visible after rerun.
             st.session_state.prediction_result = result
+
+            # Tell Streamlit to clear the
+            # description and amount fields.
+            st.session_state.clear_inputs = True
 
             st.success(
                 "Expense added successfully."
@@ -892,7 +916,8 @@ else:
                     "Expense deleted successfully."
                 )
 
-                # Clear the displayed prediction after deletion
+                # Clear the displayed prediction
+                # after deleting an expense.
                 st.session_state.prediction_result = None
 
                 st.rerun()

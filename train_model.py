@@ -8,31 +8,135 @@ import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix
+)
 
 
 # ==========================================
 # LOAD TRAINING DATA
 # ==========================================
 
-# Read the expense descriptions and their categories
-# from the CSV file used to train the machine learning model.
+# Load the training dataset from the CSV file.
 
-df = pd.read_csv("data/expenses_training.csv")
+df = pd.read_csv(
+    "data/expenses_training.csv"
+)
+
+
+# ==========================================
+# CLEAN THE DATA
+# ==========================================
+
+# Remove rows where description or category is missing.
+
+df = df.dropna(
+    subset=[
+        "description",
+        "category"
+    ]
+)
+
+
+# Remove unnecessary spaces from descriptions.
+
+df["description"] = (
+    df["description"]
+    .astype(str)
+    .str.strip()
+)
+
+
+# Remove empty descriptions.
+
+df = df[
+    df["description"] != ""
+]
+
+
+# Remove duplicate descriptions.
+
+df = df.drop_duplicates(
+    subset=["description"]
+)
+
+
+# ==========================================
+# DISPLAY DATASET INFORMATION
+# ==========================================
+
+print()
+print("==========================================")
+print("SMARTSPEND MACHINE LEARNING TRAINING")
+print("==========================================")
+print()
+
+print(
+    "Total training records:",
+    len(df)
+)
+
+print()
+
+print("Category distribution:")
+
+print(
+    df["category"].value_counts()
+)
+
+print()
+
+
+# ==========================================
+# SPLIT DATASET
+# ==========================================
+
+# Separate the input descriptions from the
+# category labels.
+
+X = df["description"]
+
+y = df["category"]
+
+
+# Split the dataset into:
+#
+# 80% training data
+# 20% testing data
+#
+# stratify=y keeps the category distribution
+# balanced between training and testing.
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.20,
+    random_state=42,
+    stratify=y
+)
 
 
 # ==========================================
 # CREATE MACHINE LEARNING PIPELINE
 # ==========================================
 
-# TF-IDF converts expense descriptions into numerical
-# features that the machine learning algorithm can understand.
+# TF-IDF converts text into numerical features.
 #
-# ngram_range=(1, 2) allows the model to learn both
-# individual words and two-word phrases such as:
-# "movie ticket", "bus fare", and "sports shoes".
-
-# Logistic Regression is used to classify each expense
-# description into one of the predefined expense categories.
+# ngram_range=(1, 2) allows the model to learn:
+#
+# Single words:
+# "pizza"
+# "coffee"
+# "bus"
+#
+# Two-word phrases:
+# "movie ticket"
+# "sports shoes"
+# "python course"
+# "bus fare"
 
 model = Pipeline([
     (
@@ -40,40 +144,140 @@ model = Pipeline([
         TfidfVectorizer(
             ngram_range=(1, 2),
             lowercase=True,
-            sublinear_tf=True
+            sublinear_tf=True,
+            min_df=1
         )
     ),
+
     (
         "classifier",
         LogisticRegression(
-            max_iter=1000
+            max_iter=2000,
+            class_weight="balanced"
         )
     )
 ])
 
 
 # ==========================================
-# TRAIN THE MODEL
+# TRAIN MODEL
 # ==========================================
 
-# Train the machine learning pipeline using:
-# - description as the input feature
-# - category as the target label
+print("Training model...")
 
 model.fit(
-    df["description"],
-    df["category"]
+    X_train,
+    y_train
+)
+
+print("Training completed.")
+print()
+
+
+# ==========================================
+# TEST MODEL
+# ==========================================
+
+# Make predictions using the test data.
+
+predictions = model.predict(
+    X_test
 )
 
 
 # ==========================================
-# SAVE THE TRAINED MODEL
+# CALCULATE ACCURACY
 # ==========================================
 
-# Save the trained model as a pickle file.
-# FastAPI will load this file later when the API starts.
+accuracy = accuracy_score(
+    y_test,
+    predictions
+)
 
-with open("model.pkl", "wb") as file:
+
+print("==========================================")
+print("MODEL EVALUATION")
+print("==========================================")
+print()
+
+print(
+    "Accuracy:",
+    round(accuracy * 100, 2),
+    "%"
+)
+
+print()
+
+
+# ==========================================
+# CLASSIFICATION REPORT
+# ==========================================
+
+# This shows precision, recall and F1-score
+# for every expense category.
+
+print("Classification Report:")
+print()
+
+print(
+    classification_report(
+        y_test,
+        predictions
+    )
+)
+
+
+# ==========================================
+# CONFUSION MATRIX
+# ==========================================
+
+print("Confusion Matrix:")
+print()
+
+print(
+    confusion_matrix(
+        y_test,
+        predictions
+    )
+)
+
+print()
+
+
+# ==========================================
+# RETRAIN USING THE COMPLETE DATASET
+# ==========================================
+
+# After evaluation, train the final model using
+# ALL available data.
+#
+# This gives the final model as much training
+# information as possible before deployment.
+
+print("Training final model using complete dataset...")
+
+model.fit(
+    X,
+    y
+)
+
+print("Final model trained.")
+print()
+
+
+# ==========================================
+# SAVE TRAINED MODEL
+# ==========================================
+
+# Save the final trained model.
+#
+# FastAPI will load this file when the backend
+# starts.
+
+with open(
+    "model.pkl",
+    "wb"
+) as file:
 
     pickle.dump(
         model,
@@ -82,14 +286,36 @@ with open("model.pkl", "wb") as file:
 
 
 # ==========================================
-# DISPLAY TRAINING INFORMATION
+# FINAL INFORMATION
 # ==========================================
 
-# Print basic information so we can confirm that
-# the training process completed successfully.
-
-print("Model trained successfully.")
-print("Training records:", len(df))
+print("==========================================")
+print("MODEL SAVED")
+print("==========================================")
 print()
-print("Category distribution:")
-print(df["category"].value_counts())
+
+print(
+    "Model saved as: model.pkl"
+)
+
+print(
+    "Final training records:",
+    len(df)
+)
+
+print()
+
+print("Categories:")
+
+for category in sorted(
+    df["category"].unique()
+):
+
+    print(
+        "-",
+        category
+    )
+
+print()
+
+print("Training process completed successfully.")

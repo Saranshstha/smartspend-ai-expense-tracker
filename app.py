@@ -5,9 +5,7 @@ import requests
 import streamlit as st
 
 
-# ==========================================
 # PAGE CONFIGURATION
-# ==========================================
 
 st.set_page_config(
     page_title="SmartSpend",
@@ -17,14 +15,13 @@ st.set_page_config(
 )
 
 
-# ==========================================
+
 # CUSTOM DESIGN
-# ==========================================
+
 
 st.markdown(
     """
     <style>
-
     /* =====================================
        GLOBAL PAGE
     ===================================== */
@@ -293,9 +290,9 @@ st.markdown(
 )
 
 
-# ==========================================
+
 # FASTAPI CONFIGURATION
-# ==========================================
+
 
 API_URL = os.getenv(
     "API_URL",
@@ -303,9 +300,9 @@ API_URL = os.getenv(
 )
 
 
-# ==========================================
+
 # SESSION STATE
-# ==========================================
+
 
 if "prediction_result" not in st.session_state:
     st.session_state.prediction_result = None
@@ -314,9 +311,9 @@ if "clear_inputs" not in st.session_state:
     st.session_state.clear_inputs = False
 
 
-# ==========================================
+
 # CLEAR INPUTS AFTER SUCCESSFUL PREDICTION
-# ==========================================
+
 
 if st.session_state.clear_inputs:
 
@@ -327,9 +324,9 @@ if st.session_state.clear_inputs:
     st.session_state.clear_inputs = False
 
 
-# ==========================================
+
 # API FUNCTIONS
-# ==========================================
+
 
 def check_api():
 
@@ -464,9 +461,9 @@ def delete_expense(expense_id):
         return False, "FastAPI backend could not be reached."
 
 
-# ==========================================
+
 # HEADER
-# ==========================================
+
 
 st.markdown(
     '<div class="brand">SMARTSPEND</div>',
@@ -489,9 +486,9 @@ st.markdown(
 )
 
 
-# ==========================================
+
 # API STATUS
-# ==========================================
+
 
 health = check_api()
 
@@ -520,9 +517,9 @@ else:
 st.divider()
 
 
-# ==========================================
+
 # ADD EXPENSE
-# ==========================================
+
 
 st.markdown(
     '<div class="section-label">Add Expense</div>',
@@ -535,9 +532,9 @@ input_col, prediction_col = st.columns(
 )
 
 
-# ==========================================
+
 # INPUT SECTION
-# ==========================================
+
 
 with input_col:
 
@@ -562,9 +559,9 @@ with input_col:
     )
 
 
-# ==========================================
+
 # AI PREDICTION SECTION
-# ==========================================
+
 
 with prediction_col:
 
@@ -594,9 +591,9 @@ with prediction_col:
         )
 
 
-# ==========================================
+
 # PREDICTION
-# ==========================================
+
 
 if predict_clicked:
 
@@ -645,9 +642,9 @@ if predict_clicked:
 st.divider()
 
 
-# ==========================================
+
 # DASHBOARD
-# ==========================================
+
 
 st.markdown(
     '<div class="section-label">Overview</div>',
@@ -666,9 +663,9 @@ if summary is None or expenses is None:
 
 else:
 
-    # ==========================================
+    
     # REFRESH
-    # ==========================================
+    
 
     refresh_col, empty_col = st.columns(
         [1, 6]
@@ -681,9 +678,9 @@ else:
             st.rerun()
 
 
-    # ==========================================
+    
     # EMPTY STATE
-    # ==========================================
+    
 
     if len(expenses) == 0:
 
@@ -693,9 +690,9 @@ else:
 
     else:
 
-        # ==========================================
+        
         # SUMMARY VALUES
-        # ==========================================
+        
 
         total_spending = summary.get(
             "total_spending",
@@ -718,9 +715,9 @@ else:
             average_expense = 0
 
 
-        # ==========================================
+        
         # OVERVIEW METRICS
-        # ==========================================
+        
 
         metric1, metric2, metric3 = st.columns(
             [1, 1, 1],
@@ -756,9 +753,9 @@ else:
         st.divider()
 
 
-        # ==========================================
+        
         # CATEGORY SUMMARY
-        # ==========================================
+        
 
         st.markdown(
             '<div class="section-label">'
@@ -798,9 +795,9 @@ else:
         st.divider()
 
 
-        # ==========================================
+        
         # EXPENSE HISTORY
-        # ==========================================
+        
 
         st.markdown(
             '<div class="section-label">'
@@ -870,9 +867,9 @@ else:
         st.divider()
 
 
-        # ==========================================
+        
         # DELETE EXPENSE
-        # ==========================================
+        
 
         st.markdown(
             '<div class="section-label">'
@@ -929,9 +926,9 @@ else:
                 )
 
 
-# ==========================================
+
 # FOOTER
-# ==========================================
+
 
 st.divider()
 

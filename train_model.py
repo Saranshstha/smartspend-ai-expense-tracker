@@ -1,7 +1,3 @@
-# ==========================================
-# IMPORT REQUIRED LIBRARIES
-# ==========================================
-
 import pandas as pd
 import pickle
 
@@ -16,9 +12,9 @@ from sklearn.metrics import (
 )
 
 
-# ==========================================
+
 # LOAD TRAINING DATA
-# ==========================================
+
 
 # Load the training dataset from the CSV file.
 
@@ -27,9 +23,9 @@ df = pd.read_csv(
 )
 
 
-# ==========================================
+
 # CLEAN THE DATA
-# ==========================================
+
 
 # Remove rows where description or category is missing.
 
@@ -64,9 +60,9 @@ df = df.drop_duplicates(
 )
 
 
-# ==========================================
+
 # DISPLAY DATASET INFORMATION
-# ==========================================
+
 
 print()
 print("==========================================")
@@ -89,10 +85,7 @@ print(
 
 print()
 
-
-# ==========================================
 # SPLIT DATASET
-# ==========================================
 
 # Separate the input descriptions from the
 # category labels.
@@ -118,10 +111,8 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-
-# ==========================================
 # CREATE MACHINE LEARNING PIPELINE
-# ==========================================
+
 
 # TF-IDF converts text into numerical features.
 #
@@ -159,9 +150,8 @@ model = Pipeline([
 ])
 
 
-# ==========================================
+
 # TRAIN MODEL
-# ==========================================
 
 print("Training model...")
 
@@ -174,9 +164,7 @@ print("Training completed.")
 print()
 
 
-# ==========================================
 # TEST MODEL
-# ==========================================
 
 # Make predictions using the test data.
 
@@ -185,9 +173,9 @@ predictions = model.predict(
 )
 
 
-# ==========================================
+
 # CALCULATE ACCURACY
-# ==========================================
+
 
 accuracy = accuracy_score(
     y_test,
@@ -209,9 +197,7 @@ print(
 print()
 
 
-# ==========================================
 # CLASSIFICATION REPORT
-# ==========================================
 
 # This shows precision, recall and F1-score
 # for every expense category.
@@ -227,9 +213,8 @@ print(
 )
 
 
-# ==========================================
+
 # CONFUSION MATRIX
-# ==========================================
 
 print("Confusion Matrix:")
 print()
@@ -244,9 +229,9 @@ print(
 print()
 
 
-# ==========================================
+
 # RETRAIN USING THE COMPLETE DATASET
-# ==========================================
+
 
 # After evaluation, train the final model using
 # ALL available data.
@@ -265,9 +250,9 @@ print("Final model trained.")
 print()
 
 
-# ==========================================
+
 # SAVE TRAINED MODEL
-# ==========================================
+
 
 # Save the final trained model.
 #
@@ -285,9 +270,9 @@ with open(
     )
 
 
-# ==========================================
+
 # FINAL INFORMATION
-# ==========================================
+
 
 print("==========================================")
 print("MODEL SAVED")

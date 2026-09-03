@@ -1,73 +1,126 @@
-#uvicorn app.main:app --reload
-from pathlib import Path
+# ============================================================
+# SMARTSPEND - FASTAPI BACKEND
+# ============================================================
+
+import os
 import pickle
 import sqlite3
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 
-# PROJECT PATHS
+# ============================================================
+# PATH CONFIGURATION
+# ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
 
-MODEL_PATH = BASE_DIR / "model.pkl"
+MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "model.pkl"
+)
 
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR = os.path.join(
+    BASE_DIR,
+    "data"
+)
 
-DATABASE = DATA_DIR / "expenses.db"
+DATABASE = os.path.join(
+    DATA_DIR,
+    "expenses.db"
+)
 
 
-
-# FASTAPI APPLICATION
-
+# ============================================================
+# APPLICATION
+# ============================================================
 
 app = FastAPI(
     title="SmartSpend API",
     description="AI-powered expense categorization API",
-    version="1.0.0"
+    version="1.5.0"
 )
 
 
+# ============================================================
+# TIMEZONE
+# Nepal Time = UTC + 5:45
+# ============================================================
 
-# LOAD AI MODEL
+NEPAL_TZ = timezone(
+    timedelta(hours=5, minutes=45)
+)
+
+DELETED_EXPENSE_RETENTION_DAYS = 15
 
 
-if not MODEL_PATH.exists():
+# ============================================================
+# LOAD MACHINE LEARNING MODEL
+# ============================================================
 
-    raise FileNotFoundError(
-        "model.pkl was not found. Run train_model.py first."
+try:
+
+    with open(
+        MODEL_PATH,
+        "rb"
+    ) as model_file:
+
+        model = pickle.load(
+            model_file
+        )
+
+except Exception as e:
+
+    model = None
+
+    print(
+        "Warning: Could not load model:",
+        e
     )
 
-with open(MODEL_PATH, "rb") as file:
 
-    model = pickle.load(file)
+# ============================================================
+# DATABASE INITIALIZATION
+# ============================================================
 
+def initialize_database():
 
+    os.makedirs(
+        DATA_DIR,
+        exist_ok=True
+    )
 
-# DATABASE
+    connection = sqlite3.connect(
+        DATABASE
+    )
 
+    cursor = connection.cursor()
 
-def create_database():
-
-    # Open the SQLite database, creating the file when it does not exist.
-    connection = sqlite3.connect(DATABASE)
-
-    # Create the expenses table for new installations.
-    connection.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             description TEXT NOT NULL,
             amount REAL NOT NULL,
             category TEXT NOT NULL,
-            confidence REAL NOT NULL DEFAULT 0
+            confidence REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            deleted_at TEXT
         )
-    """)
+        """
+    )
 
-    cursor = connection.cursor()
+    # --------------------------------------------------------
+    # CHECK EXISTING COLUMNS
+    # --------------------------------------------------------
 
-    # Inspect existing columns so older databases can be upgraded safely.
     cursor.execute(
         "PRAGMA table_info(expenses)"
     )
@@ -77,359 +130,1684 @@ def create_database():
         for row in cursor.fetchall()
     ]
 
+
+    # --------------------------------------------------------
+    # ADD CONFIDENCE COLUMN IF REQUIRED
+    # --------------------------------------------------------
+
     if "confidence" not in columns:
 
-        # Add the confidence column when migrating an older database schema.
-        connection.execute(
+        cursor.execute(
             """
             ALTER TABLE expenses
-            ADD COLUMN confidence
-            REAL NOT NULL DEFAULT 0
+            ADD COLUMN confidence REAL NOT NULL DEFAULT 0
             """
         )
 
-    # Persist any schema changes and release the database connection.
+
+    # --------------------------------------------------------
+    # ADD CREATED_AT COLUMN IF REQUIRED
+    # --------------------------------------------------------
+
+    if "created_at" not in columns:
+
+        cursor.execute(
+            """
+            ALTER TABLE expenses
+            ADD COLUMN created_at TEXT
+            """
+        )
+
+        current_time = datetime.now(
+            NEPAL_TZ
+        ).isoformat()
+
+        cursor.execute(
+            """
+            UPDATE expenses
+            SET created_at = ?
+            WHERE created_at IS NULL
+            """,
+            (current_time,)
+        )
+
+
+    # Store deletion time so expenses can be restored during retention.
+    if "deleted_at" not in columns:
+
+        cursor.execute(
+            """
+            ALTER TABLE expenses
+            ADD COLUMN deleted_at TEXT
+            """
+        )
+
     connection.commit()
+
     connection.close()
 
 
-create_database()
+initialize_database()
 
 
-
-# REQUEST MODEL
-
+# ============================================================
+# PYDANTIC MODELS
+# ============================================================
 
 class ExpenseRequest(BaseModel):
 
     description: str = Field(
         min_length=2,
-        max_length=500,
-        description="Description of the expense"
+        max_length=500
     )
 
     amount: float = Field(
-        gt=0,
-        description="Expense amount in Nepalese Rupees"
+        gt=0
     )
 
 
+class ExpenseTableItem(BaseModel):
 
+    id: int
+
+    description: str = Field(
+        min_length=2,
+        max_length=500
+    )
+
+    amount: float = Field(
+        gt=0
+    )
+
+
+class ExpenseTableUpdate(BaseModel):
+
+    expenses: List[ExpenseTableItem]
+
+
+# ============================================================
+# DATABASE HELPER
+# ============================================================
+
+def get_connection():
+
+    connection = sqlite3.connect(
+        DATABASE
+    )
+
+    connection.row_factory = sqlite3.Row
+
+    return connection
+
+
+def purge_expired_deleted_expenses():
+
+    """Permanently remove expenses that have been in Trash for 15 days."""
+
+    cutoff = datetime.now(
+        NEPAL_TZ
+    ) - timedelta(
+        days=DELETED_EXPENSE_RETENTION_DAYS
+    )
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT id, deleted_at
+        FROM expenses
+        WHERE deleted_at IS NOT NULL
+        """
+    )
+
+    expired_ids = []
+
+    for row in cursor.fetchall():
+
+        try:
+
+            deleted_at = datetime.fromisoformat(
+                row["deleted_at"]
+            )
+
+            if deleted_at.tzinfo is None:
+
+                deleted_at = deleted_at.replace(
+                    tzinfo=NEPAL_TZ
+                )
+
+            if deleted_at.astimezone(NEPAL_TZ) <= cutoff:
+
+                expired_ids.append(
+                    row["id"]
+                )
+
+        except (TypeError, ValueError):
+
+            # Retain unreadable legacy timestamps rather than deleting data.
+            continue
+
+
+    if expired_ids:
+
+        cursor.executemany(
+            "DELETE FROM expenses WHERE id = ?",
+            [(expense_id,) for expense_id in expired_ids]
+        )
+
+        connection.commit()
+
+
+    connection.close()
+
+
+# ============================================================
+# ML PREDICTION HELPER
+# ============================================================
+
+def predict_category(description):
+
+    if model is None:
+
+        raise HTTPException(
+            status_code=500,
+            detail="Machine learning model is not available."
+        )
+
+    try:
+
+        prediction = model.predict(
+            [description]
+        )[0]
+
+        probabilities = model.predict_proba(
+            [description]
+        )[0]
+
+        confidence = float(
+            max(probabilities) * 100
+        )
+
+        return (
+            str(prediction),
+            confidence
+        )
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail="Prediction failed: " + str(e)
+        )
+
+
+# ============================================================
 # ROOT
-
+# ============================================================
 
 @app.get("/")
 def root():
 
     return {
-        "message": "Welcome to SmartSpend API",
-        "status": "running",
-        "docs": "/docs"
+        "message": "SmartSpend API is running"
     }
 
 
-
-# HEALTH CHECK
-
+# ============================================================
+# HEALTH
+# ============================================================
 
 @app.get("/health")
-def health_check():
+def health():
 
     return {
-        "status": "healthy",
-        "service": "SmartSpend API",
-        "model_loaded": model is not None
+        "status": "healthy"
     }
 
 
-
-# PREDICT EXPENSE
-
+# ============================================================
+# ADD / PREDICT EXPENSE
+# ============================================================
 
 @app.post("/predict")
-def predict_expense(expense: ExpenseRequest):
+def predict_expense(
+    expense: ExpenseRequest
+):
 
-    # Keep the connection variable available for reliable cleanup in finally.
-    connection = None
+    category, confidence = predict_category(
+        expense.description
+    )
 
-    try:
+    created_at = datetime.now(
+        NEPAL_TZ
+    ).isoformat()
 
-        # Normalize leading and trailing whitespace before prediction and storage.
-        description = expense.description.strip()
+    connection = get_connection()
 
-        # Predict the most likely expense category from the trained model.
-        prediction = model.predict(
-            [description]
-        )[0]
+    cursor = connection.cursor()
 
-        # Calculate a percentage confidence from the strongest class probability.
-        probabilities = model.predict_proba(
-            [description]
-        )[0]
-
-        confidence = max(probabilities) * 100
-
-        # Open a database connection and save the classified expense.
-        connection = sqlite3.connect(
-            DATABASE
+    cursor.execute(
+        """
+        INSERT INTO expenses
+        (
+            description,
+            amount,
+            category,
+            confidence,
+            created_at
         )
-
-        connection.execute(
-            """
-            INSERT INTO expenses
-            (
-                description,
-                amount,
-                category,
-                confidence
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                description,
-                expense.amount,
-                str(prediction),
-                confidence
-            )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            expense.description,
+            expense.amount,
+            category,
+            confidence,
+            created_at
         )
+    )
 
-        # Commit the new expense before returning it to the client.
-        connection.commit()
+    expense_id = cursor.lastrowid
 
-        # Return the stored expense details for the frontend prediction panel.
-        return {
-            "description": description,
-            "amount": expense.amount,
-            "category": str(prediction),
-            "confidence": round(
-                confidence,
-                2
-            )
-        }
+    connection.commit()
 
-    except Exception:
+    connection.close()
 
-        # Convert prediction or database failures into a consistent API error.
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to predict and save the expense."
-        )
-
-    finally:
-
-        # Close the connection whether the request succeeds or fails.
-        if connection is not None:
-
-            connection.close()
+    return {
+        "id": expense_id,
+        "description": expense.description,
+        "amount": expense.amount,
+        "category": category,
+        "confidence": round(
+            confidence,
+            2
+        ),
+        "created_at": created_at
+    }
 
 
-
+# ============================================================
 # GET ALL EXPENSES
-
+# ============================================================
 
 @app.get("/expenses")
 def get_expenses():
 
-    # Keep the connection variable available for reliable cleanup in finally.
-    connection = None
+    purge_expired_deleted_expenses()
 
-    try:
+    connection = get_connection()
 
-        # Connect to the database and request newest expenses first.
-        connection = sqlite3.connect(
-            DATABASE
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            description,
+            amount,
+            category,
+            confidence,
+            created_at
+        FROM expenses
+        WHERE deleted_at IS NULL
+        ORDER BY id DESC
+        """
+    )
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    expenses = []
+
+    for row in rows:
+
+        expenses.append(
+            {
+                "id": row["id"],
+                "description": row["description"],
+                "amount": row["amount"],
+                "category": row["category"],
+                "confidence": row["confidence"],
+                "created_at": row["created_at"]
+            }
         )
 
-        cursor = connection.cursor()
+    return {
+        "expenses": expenses
+    }
 
-        cursor.execute("""
-            SELECT
-                id,
-                description,
-                amount,
-                category,
-                confidence
-            FROM expenses
-            ORDER BY id DESC
-        """)
 
-        # Fetch query results before converting them into JSON-friendly objects.
-        rows = cursor.fetchall()
+# ============================================================
+# GET DELETED EXPENSES
+# ============================================================
 
-        expenses = []
+@app.get("/expenses/deleted")
+def get_deleted_expenses():
 
-        # Convert each database row to the response format expected by Streamlit.
-        for row in rows:
+    purge_expired_deleted_expenses()
 
-            expenses.append({
-                "id": row[0],
-                "description": row[1],
-                "amount": row[2],
-                "category": row[3],
-                "confidence": round(
-                    row[4],
-                    2
-                )
-            })
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            description,
+            amount,
+            category,
+            confidence,
+            created_at,
+            deleted_at
+        FROM expenses
+        WHERE deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC
+        """
+    )
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    return {
+        "expenses": [dict(row) for row in rows]
+    }
+
+
+# ============================================================
+# SAVE EDITABLE TABLE
+# ============================================================
+
+@app.put("/expenses/update-table")
+def update_expense_table(
+    request: ExpenseTableUpdate
+):
+
+    if len(request.expenses) == 0:
 
         return {
-            "count": len(expenses),
-            "expenses": expenses
+            "message": "No expenses to update.",
+            "updated": []
         }
 
-    except sqlite3.Error:
 
-        # Expose a safe, client-friendly error if the database query fails.
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to retrieve expenses."
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    updated_expenses = []
+
+
+    for expense in request.expenses:
+
+        # ----------------------------------------------------
+        # FIND EXISTING EXPENSE
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM expenses
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (expense.id,)
         )
 
-    finally:
+        existing = cursor.fetchone()
 
-        # Always release the SQLite connection after processing the request.
-        if connection is not None:
+        if existing is None:
 
             connection.close()
 
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Expense with ID "
+                    + str(expense.id)
+                    + " was not found."
+                )
+            )
 
 
-# SPENDING SUMMARY
+        old_description = existing[
+            "description"
+        ]
 
+        old_amount = existing[
+            "amount"
+        ]
+
+        old_category = existing[
+            "category"
+        ]
+
+        old_confidence = existing[
+            "confidence"
+        ]
+
+        created_at = existing[
+            "created_at"
+        ]
+
+
+        # ----------------------------------------------------
+        # DETERMINE IF DESCRIPTION CHANGED
+        # ----------------------------------------------------
+
+        description_changed = (
+            expense.description.strip()
+            != old_description
+        )
+
+
+        # ----------------------------------------------------
+        # RE-PREDICT IF DESCRIPTION CHANGED
+        # ----------------------------------------------------
+
+        if description_changed:
+
+            new_category, new_confidence = (
+                predict_category(
+                    expense.description.strip()
+                )
+            )
+
+        else:
+
+            new_category = old_category
+
+            new_confidence = old_confidence
+
+
+        # ----------------------------------------------------
+        # UPDATE DATABASE
+        # ----------------------------------------------------
+
+        cursor.execute(
+            """
+            UPDATE expenses
+            SET
+                description = ?,
+                amount = ?,
+                category = ?,
+                confidence = ?
+            WHERE id = ?
+            """,
+            (
+                expense.description.strip(),
+                expense.amount,
+                new_category,
+                new_confidence,
+                expense.id
+            )
+        )
+
+
+        # ----------------------------------------------------
+        # RETURN UPDATED EXPENSE
+        # ----------------------------------------------------
+
+        updated_expenses.append(
+            {
+                "id": expense.id,
+                "description": expense.description.strip(),
+                "amount": expense.amount,
+                "category": new_category,
+                "confidence": round(
+                    float(new_confidence),
+                    2
+                ),
+                "created_at": created_at
+            }
+        )
+
+
+    connection.commit()
+
+    connection.close()
+
+
+    return {
+        "message": "Expenses updated successfully.",
+        "updated": updated_expenses
+    }
+
+
+# ============================================================
+# DELETE EXPENSE
+# ============================================================
+
+@app.delete("/expenses/{expense_id}")
+def delete_expense(
+    expense_id: int
+):
+
+    purge_expired_deleted_expenses()
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM expenses
+        WHERE id = ? AND deleted_at IS NULL
+        """,
+        (expense_id,)
+    )
+
+    existing = cursor.fetchone()
+
+    if existing is None:
+
+        connection.close()
+
+        raise HTTPException(
+            status_code=404,
+            detail="Expense not found."
+        )
+
+
+    cursor.execute(
+        """
+        UPDATE expenses
+        SET deleted_at = ?
+        WHERE id = ?
+        """,
+        (
+            datetime.now(NEPAL_TZ).isoformat(),
+            expense_id
+        )
+    )
+
+    connection.commit()
+
+    connection.close()
+
+    return {
+        "message": (
+            "Expense moved to Deleted History. "
+            "It can be restored for 15 days."
+        ),
+        "id": expense_id
+    }
+
+
+# ============================================================
+# RESTORE DELETED EXPENSE
+# ============================================================
+
+@app.post("/expenses/{expense_id}/restore")
+def restore_expense(expense_id: int):
+
+    purge_expired_deleted_expenses()
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE expenses
+        SET deleted_at = NULL
+        WHERE id = ? AND deleted_at IS NOT NULL
+        """,
+        (expense_id,)
+    )
+
+    if cursor.rowcount == 0:
+
+        connection.close()
+
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Deleted expense was not found or has already "
+                "been permanently removed."
+            )
+        )
+
+    connection.commit()
+
+    connection.close()
+
+    return {
+        "message": "Expense restored successfully.",
+        "id": expense_id
+    }
+
+
+# ============================================================
+# SUMMARY
+# ============================================================
 
 @app.get("/summary")
 def get_summary():
 
-    # Keep the connection variable available for reliable cleanup in finally.
-    connection = None
+    purge_expired_deleted_expenses()
 
-    try:
+    connection = get_connection()
 
-        # Connect to the database to calculate overall spending statistics.
-        connection = sqlite3.connect(
-            DATABASE
+    cursor = connection.cursor()
+
+
+    # --------------------------------------------------------
+    # TOTALS
+    # --------------------------------------------------------
+
+    cursor.execute(
+        """
+        SELECT
+            COUNT(*) AS total_expenses,
+            COALESCE(
+                SUM(amount),
+                0
+            ) AS total_spending
+        FROM expenses
+        WHERE deleted_at IS NULL
+        """
+    )
+
+    totals = cursor.fetchone()
+
+
+    # --------------------------------------------------------
+    # CATEGORY TOTALS
+    # --------------------------------------------------------
+
+    cursor.execute(
+        """
+        SELECT
+            category,
+            COALESCE(
+                SUM(amount),
+                0
+            ) AS total
+        FROM expenses
+        WHERE deleted_at IS NULL
+        GROUP BY category
+        ORDER BY total DESC
+        """
+    )
+
+    category_rows = cursor.fetchall()
+
+    connection.close()
+
+
+    categories = {}
+
+    for row in category_rows:
+
+        categories[
+            row["category"]
+        ] = round(
+            float(row["total"]),
+            2
         )
 
-        cursor = connection.cursor()
 
-        # Calculate the number of expenses and their combined amount.
-        cursor.execute("""
-            SELECT
-                COUNT(*),
-                COALESCE(SUM(amount), 0)
-            FROM expenses
-        """)
+    return {
+        "total_expenses": totals["total_expenses"],
+        "total_spending": round(
+            float(totals["total_spending"]),
+            2
+        ),
+        "categories": categories
+    }
 
-        total_count, total_amount = (
-            cursor.fetchone()
+
+# ============================================================
+# ANALYTICS HELPER
+# ============================================================
+
+def load_expense_rows():
+
+    purge_expired_deleted_expenses()
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            description,
+            amount,
+            category,
+            confidence,
+            created_at
+        FROM expenses
+        WHERE deleted_at IS NULL
+        ORDER BY created_at ASC
+        """
+    )
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    return rows
+
+
+# ============================================================
+# CATEGORY STATISTICS
+# ============================================================
+
+def get_category_statistics(rows):
+
+    statistics = {}
+
+    for row in rows:
+
+        category = row["category"]
+
+        if category not in statistics:
+
+            statistics[category] = {
+                "spending": 0,
+                "transactions": 0
+            }
+
+        statistics[category]["spending"] += float(
+            row["amount"]
         )
 
-        # Aggregate spending totals for each predicted category.
-        cursor.execute("""
-            SELECT
+        statistics[category]["transactions"] += 1
+
+
+    for category in statistics:
+
+        statistics[category]["spending"] = round(
+            statistics[category]["spending"],
+            2
+        )
+
+
+    return statistics
+
+
+# ============================================================
+# HIGHEST EXPENSE
+# ============================================================
+
+def get_highest_expense(rows):
+
+    if not rows:
+
+        return None
+
+    highest = max(
+        rows,
+        key=lambda row: float(
+            row["amount"]
+        )
+    )
+
+    return {
+        "id": highest["id"],
+        "description": highest["description"],
+        "amount": round(
+            float(highest["amount"]),
+            2
+        ),
+        "category": highest["category"],
+        "confidence": round(
+            float(highest["confidence"]),
+            2
+        ),
+        "created_at": highest["created_at"]
+    }
+
+
+# ============================================================
+# PERCENTAGE CHANGE
+# ============================================================
+
+def percentage_change(
+    current,
+    previous
+):
+
+    if previous == 0:
+
+        if current == 0:
+            return 0
+
+        return 100
+
+    return (
+        (current - previous)
+        / previous
+    ) * 100
+
+
+# ============================================================
+# INSIGHTS
+# ============================================================
+
+def build_insights(
+    rows,
+    total_spending,
+    total_expenses
+):
+
+    insights = []
+
+    if total_expenses == 0:
+
+        return [
+            "No expenses have been recorded yet."
+        ]
+
+
+    # --------------------------------------------------------
+    # MOST SPENT CATEGORY
+    # --------------------------------------------------------
+
+    category_totals = {}
+
+    for row in rows:
+
+        category = row["category"]
+
+        category_totals[category] = (
+            category_totals.get(
                 category,
-                SUM(amount)
-            FROM expenses
-            GROUP BY category
-            ORDER BY SUM(amount) DESC
-        """)
+                0
+            )
+            + float(row["amount"])
+        )
 
-        category_rows = cursor.fetchall()
 
-        categories = {}
+    if category_totals:
 
-        # Format grouped totals as a category-to-amount mapping for the frontend.
-        for category, amount in category_rows:
+        most_spent_category = max(
+            category_totals,
+            key=category_totals.get
+        )
 
-            categories[category] = round(
+        category_amount = category_totals[
+            most_spent_category
+        ]
+
+        percentage = (
+            category_amount
+            / total_spending
+            * 100
+            if total_spending > 0
+            else 0
+        )
+
+        insights.append(
+            most_spent_category
+            + " is your highest spending category, "
+            + "accounting for "
+            + format(
+                percentage,
+                ".1f"
+            )
+            + "% of spending."
+        )
+
+
+    # --------------------------------------------------------
+    # TRANSACTION FREQUENCY
+    # --------------------------------------------------------
+
+    if total_expenses >= 5:
+
+        insights.append(
+            "You have recorded "
+            + str(total_expenses)
+            + " expenses in this period."
+        )
+
+
+    # --------------------------------------------------------
+    # AVERAGE EXPENSE
+    # --------------------------------------------------------
+
+    average = (
+        total_spending
+        / total_expenses
+    )
+
+    insights.append(
+        "Your average expense is Rs. "
+        + format(
+            average,
+            ",.2f"
+        )
+        + "."
+    )
+
+
+    return insights
+
+
+# ============================================================
+# MONTHLY ANALYTICS
+# ============================================================
+
+@app.get("/analytics/monthly")
+def monthly_analytics(
+    year: int = Query(...),
+    month: int = Query(...)
+):
+
+    if month < 1 or month > 12:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Month must be between 1 and 12."
+        )
+
+
+    rows = load_expense_rows()
+
+    matching_rows = []
+
+
+    for row in rows:
+
+        try:
+
+            created_at = datetime.fromisoformat(
+                row["created_at"]
+            )
+
+            if created_at.tzinfo is None:
+
+                created_at = created_at.replace(
+                    tzinfo=NEPAL_TZ
+                )
+
+            created_at_nepal = created_at.astimezone(
+                NEPAL_TZ
+            )
+
+            if (
+                created_at_nepal.year == year
+                and created_at_nepal.month == month
+            ):
+
+                matching_rows.append(row)
+
+        except Exception:
+
+            continue
+
+
+    total_expenses = len(
+        matching_rows
+    )
+
+    total_spending = sum(
+        float(row["amount"])
+        for row in matching_rows
+    )
+
+    average_expense = (
+        total_spending / total_expenses
+        if total_expenses > 0
+        else 0
+    )
+
+
+    # --------------------------------------------------------
+    # CATEGORY TOTALS
+    # --------------------------------------------------------
+
+    categories = {}
+
+    for row in matching_rows:
+
+        category = row["category"]
+
+        categories[category] = (
+            categories.get(
+                category,
+                0
+            )
+            + float(row["amount"])
+        )
+
+
+    categories = {
+        category: round(
+            amount,
+            2
+        )
+        for category, amount in categories.items()
+    }
+
+
+    # --------------------------------------------------------
+    # DAILY SPENDING
+    # --------------------------------------------------------
+
+    daily_totals = {}
+
+    for row in matching_rows:
+
+        try:
+
+            created_at = datetime.fromisoformat(
+                row["created_at"]
+            )
+
+            if created_at.tzinfo is None:
+
+                created_at = created_at.replace(
+                    tzinfo=NEPAL_TZ
+                )
+
+            date_key = created_at.astimezone(
+                NEPAL_TZ
+            ).strftime(
+                "%Y-%m-%d"
+            )
+
+            daily_totals[date_key] = (
+                daily_totals.get(
+                    date_key,
+                    0
+                )
+                + float(row["amount"])
+            )
+
+        except Exception:
+
+            continue
+
+
+    daily_spending = [
+        {
+            "date": date,
+            "amount": round(
                 amount,
                 2
             )
-
-        return {
-            "total_expenses": total_count,
-            "total_spending": round(
-                total_amount,
-                2
-            ),
-            "categories": categories
         }
+        for date, amount
+        in sorted(
+            daily_totals.items()
+        )
+    ]
 
-    except sqlite3.Error:
 
-        # Expose a safe, client-friendly error if summary generation fails.
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to retrieve spending summary."
+    # --------------------------------------------------------
+    # HIGHEST EXPENSE
+    # --------------------------------------------------------
+
+    highest_expense = get_highest_expense(
+        matching_rows
+    )
+
+
+    # --------------------------------------------------------
+    # CATEGORY STATISTICS
+    # --------------------------------------------------------
+
+    category_statistics = (
+        get_category_statistics(
+            matching_rows
+        )
+    )
+
+
+    most_spent_category = None
+
+    most_frequent_category = None
+
+
+    if category_statistics:
+
+        most_spent_category = max(
+            category_statistics,
+            key=lambda category:
+            category_statistics[category][
+                "spending"
+            ]
         )
 
-    finally:
-
-        # Always release the SQLite connection after processing the request.
-        if connection is not None:
-
-            connection.close()
-
-
-
-# DELETE EXPENSE
-
-
-@app.delete("/expenses/{expense_id}")
-def delete_expense(expense_id: int):
-
-    # Keep the connection variable available for reliable cleanup in finally.
-    connection = None
-
-    try:
-
-        # Connect to the database and delete only the selected expense ID.
-        connection = sqlite3.connect(
-            DATABASE
+        most_frequent_category = max(
+            category_statistics,
+            key=lambda category:
+            category_statistics[category][
+                "transactions"
+            ]
         )
 
-        cursor = connection.cursor()
 
-        cursor.execute(
-            """
-            DELETE FROM expenses
-            WHERE id = ?
-            """,
-            (expense_id,)
-        )
+    # --------------------------------------------------------
+    # INSIGHTS
+    # --------------------------------------------------------
 
-        # Return a not-found response when the ID did not match any record.
-        if cursor.rowcount == 0:
+    insights = build_insights(
+        matching_rows,
+        total_spending,
+        total_expenses
+    )
 
-            raise HTTPException(
-                status_code=404,
-                detail="Expense not found."
+
+    return {
+        "year": year,
+        "month": month,
+        "total_expenses": total_expenses,
+        "total_spending": round(
+            total_spending,
+            2
+        ),
+        "average_expense": round(
+            average_expense,
+            2
+        ),
+        "categories": categories,
+        "category_statistics": category_statistics,
+        "most_spent_category": most_spent_category,
+        "most_frequent_category": most_frequent_category,
+        "daily_spending": daily_spending,
+        "highest_expense": highest_expense,
+        "insights": insights
+    }
+
+
+# ============================================================
+# WEEKLY ANALYTICS
+# ============================================================
+
+@app.get("/analytics/weekly")
+def weekly_analytics():
+
+    now = datetime.now(
+        NEPAL_TZ
+    )
+
+    current_date = now.date()
+
+    monday = current_date - timedelta(
+        days=current_date.weekday()
+    )
+
+    sunday = monday + timedelta(
+        days=6
+    )
+
+
+    week_start = datetime.combine(
+        monday,
+        datetime.min.time(),
+        tzinfo=NEPAL_TZ
+    )
+
+    week_end = datetime.combine(
+        sunday,
+        datetime.max.time(),
+        tzinfo=NEPAL_TZ
+    )
+
+
+    rows = load_expense_rows()
+
+    matching_rows = []
+
+
+    for row in rows:
+
+        try:
+
+            created_at = datetime.fromisoformat(
+                row["created_at"]
             )
 
-        # Persist the deletion before confirming the result to the client.
-        connection.commit()
+            if created_at.tzinfo is None:
 
-        return {
-            "message": "Expense deleted successfully.",
-            "expense_id": expense_id
-        }
+                created_at = created_at.replace(
+                    tzinfo=NEPAL_TZ
+                )
 
-    except HTTPException:
+            created_at = created_at.astimezone(
+                NEPAL_TZ
+            )
 
-        # Preserve intentional HTTP responses such as the 404 above.
-        raise
+            if (
+                week_start
+                <= created_at
+                <= week_end
+            ):
 
-    except sqlite3.Error:
+                matching_rows.append(row)
 
-        # Convert database failures into a consistent API error response.
-        raise HTTPException(
-            status_code=500,
-            detail="Database error while deleting expense."
+        except Exception:
+
+            continue
+
+
+    total_expenses = len(
+        matching_rows
+    )
+
+    total_spending = sum(
+        float(row["amount"])
+        for row in matching_rows
+    )
+
+    average_expense = (
+        total_spending
+        / total_expenses
+        if total_expenses > 0
+        else 0
+    )
+
+
+    # --------------------------------------------------------
+    # CATEGORY TOTALS
+    # --------------------------------------------------------
+
+    categories = {}
+
+    for row in matching_rows:
+
+        category = row["category"]
+
+        categories[category] = (
+            categories.get(
+                category,
+                0
+            )
+            + float(row["amount"])
         )
 
-    finally:
 
-        # Always release the SQLite connection after processing the request.
-        if connection is not None:
+    categories = {
+        category: round(
+            amount,
+            2
+        )
+        for category, amount in categories.items()
+    }
 
-            connection.close()
+
+    # --------------------------------------------------------
+    # DAILY SPENDING
+    # --------------------------------------------------------
+
+    daily_totals = {}
+
+    for day_offset in range(7):
+
+        current_day = (
+            monday
+            + timedelta(
+                days=day_offset
+            )
+        )
+
+        daily_totals[
+            current_day.strftime(
+                "%Y-%m-%d"
+            )
+        ] = 0
+
+
+    for row in matching_rows:
+
+        try:
+
+            created_at = datetime.fromisoformat(
+                row["created_at"]
+            )
+
+            if created_at.tzinfo is None:
+
+                created_at = created_at.replace(
+                    tzinfo=NEPAL_TZ
+                )
+
+            created_at = created_at.astimezone(
+                NEPAL_TZ
+            )
+
+            date_key = created_at.strftime(
+                "%Y-%m-%d"
+            )
+
+            if date_key in daily_totals:
+
+                daily_totals[date_key] += float(
+                    row["amount"]
+                )
+
+        except Exception:
+
+            continue
+
+
+    daily_spending = [
+        {
+            "date": date,
+            "amount": round(
+                amount,
+                2
+            )
+        }
+        for date, amount
+        in sorted(
+            daily_totals.items()
+        )
+    ]
+
+
+    # --------------------------------------------------------
+    # CATEGORY STATISTICS
+    # --------------------------------------------------------
+
+    category_statistics = (
+        get_category_statistics(
+            matching_rows
+        )
+    )
+
+
+    most_spent_category = None
+
+    most_frequent_category = None
+
+
+    if category_statistics:
+
+        most_spent_category = max(
+            category_statistics,
+            key=lambda category:
+            category_statistics[category][
+                "spending"
+            ]
+        )
+
+        most_frequent_category = max(
+            category_statistics,
+            key=lambda category:
+            category_statistics[category][
+                "transactions"
+            ]
+        )
+
+
+    # --------------------------------------------------------
+    # HIGHEST EXPENSE
+    # --------------------------------------------------------
+
+    highest_expense = get_highest_expense(
+        matching_rows
+    )
+
+
+    # --------------------------------------------------------
+    # INSIGHTS
+    # --------------------------------------------------------
+
+    insights = build_insights(
+        matching_rows,
+        total_spending,
+        total_expenses
+    )
+
+
+    return {
+        "week_start": monday.strftime(
+            "%Y-%m-%d"
+        ),
+        "week_end": sunday.strftime(
+            "%Y-%m-%d"
+        ),
+        "total_expenses": total_expenses,
+        "total_spending": round(
+            total_spending,
+            2
+        ),
+        "average_expense": round(
+            average_expense,
+            2
+        ),
+        "categories": categories,
+        "category_statistics": category_statistics,
+        "most_spent_category": most_spent_category,
+        "most_frequent_category": most_frequent_category,
+        "daily_spending": daily_spending,
+        "highest_expense": highest_expense,
+        "insights": insights
+    }
+
+
+# ============================================================
+# MONTHLY TREND
+# ============================================================
+
+@app.get("/analytics/trend")
+def monthly_trend(
+    months: int = Query(
+        6,
+        ge=1,
+        le=24
+    )
+):
+
+    now = datetime.now(
+        NEPAL_TZ
+    )
+
+    rows = load_expense_rows()
+
+    results = []
+
+
+    for offset in range(
+        months - 1,
+        -1,
+        -1
+    ):
+
+        year = now.year
+
+        month = now.month - offset
+
+        while month <= 0:
+
+            month += 12
+            year -= 1
+
+
+        total_spending = 0
+        total_expenses = 0
+
+
+        for row in rows:
+
+            try:
+
+                created_at = datetime.fromisoformat(
+                    row["created_at"]
+                )
+
+                if created_at.tzinfo is None:
+
+                    created_at = created_at.replace(
+                        tzinfo=NEPAL_TZ
+                    )
+
+                created_at = created_at.astimezone(
+                    NEPAL_TZ
+                )
+
+                if (
+                    created_at.year == year
+                    and created_at.month == month
+                ):
+
+                    total_spending += float(
+                        row["amount"]
+                    )
+
+                    total_expenses += 1
+
+            except Exception:
+
+                continue
+
+
+        label = datetime(
+            year,
+            month,
+            1
+        ).strftime(
+            "%b %Y"
+        )
+
+
+        results.append(
+            {
+                "year": year,
+                "month": month,
+                "label": label,
+                "total_spending": round(
+                    total_spending,
+                    2
+                ),
+                "total_expenses": total_expenses
+            }
+        )
+
+
+    return {
+        "months": results
+    }
+
+
+# ============================================================
+# MONTH-TO-MONTH COMPARISON
+# ============================================================
+
+@app.get("/analytics/comparison")
+def monthly_comparison(
+    year: int = Query(...),
+    month: int = Query(...)
+):
+
+    if month < 1 or month > 12:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Month must be between 1 and 12."
+        )
+
+
+    # --------------------------------------------------------
+    # PREVIOUS MONTH
+    # --------------------------------------------------------
+
+    if month == 1:
+
+        previous_year = year - 1
+        previous_month = 12
+
+    else:
+
+        previous_year = year
+        previous_month = month - 1
+
+
+    current = monthly_analytics(
+        year,
+        month
+    )
+
+    previous = monthly_analytics(
+        previous_year,
+        previous_month
+    )
+
+
+    change = percentage_change(
+        current["total_spending"],
+        previous["total_spending"]
+    )
+
+
+    # --------------------------------------------------------
+    # CATEGORY COMPARISON
+    # --------------------------------------------------------
+
+    all_categories = set()
+
+    all_categories.update(
+        current["categories"].keys()
+    )
+
+    all_categories.update(
+        previous["categories"].keys()
+    )
+
+
+    category_comparison = {}
+
+
+    for category in sorted(
+        all_categories
+    ):
+
+        current_amount = current[
+            "categories"
+        ].get(
+            category,
+            0
+        )
+
+        previous_amount = previous[
+            "categories"
+        ].get(
+            category,
+            0
+        )
+
+
+        category_change = percentage_change(
+            current_amount,
+            previous_amount
+        )
+
+
+        category_comparison[
+            category
+        ] = {
+            "current": round(
+                current_amount,
+                2
+            ),
+            "previous": round(
+                previous_amount,
+                2
+            ),
+            "change_percent": round(
+                category_change,
+                2
+            )
+        }
+
+
+    return {
+        "current_month": current,
+        "previous_month": previous,
+        "change_percent": round(
+            change,
+            2
+        ),
+        "category_comparison": category_comparison
+    }

@@ -14,7 +14,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="SmartSpend",
-    page_icon="S",
+    page_icon="favicon.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -66,14 +66,13 @@ st.markdown(
 
     .block-container {
         width: 100%;
-        max-width: 1400px;
-        margin: 0 auto;
+        max-width: none;
+        margin: 0;
         padding: 2.5rem 3.5rem 4rem;
 
-        transition:
-            max-width 0.2s ease,
-            padding 0.2s ease;
-    }
+    transition:
+        padding 0.2s ease;  
+}
 
     header[data-testid="stHeader"] {
         background: transparent;
@@ -87,7 +86,6 @@ st.markdown(
     section[data-testid="stSidebar"] {
 
         width: 260px !important;
-        min-width: 260px !important;
 
         background-color: var(--sidebar-bg);
 
@@ -516,36 +514,63 @@ st.markdown(
 
     div[data-baseweb="input"] {
 
-        background-color: var(--input-bg);
+        background-color: var(--card-bg) !important;
 
-        border:
-            1px solid #383838;
+        border: 1px solid var(--border) !important;
 
         border-radius: 10px;
 
         min-height: 46px;
 
         transition:
+            background-color 0.18s ease,
             border-color 0.18s ease,
             box-shadow 0.18s ease;
     }
 
+    div[data-baseweb="input"]:hover {
+
+        background-color: var(--hover-bg) !important;
+
+        border-color: var(--border-hover) !important;
+    }
+
     div[data-baseweb="input"]:focus-within {
 
-        border-color: #E5E5E5;
+        background-color: var(--card-bg) !important;
+
+        border-color: var(--border-hover) !important;
 
         box-shadow:
             0 0 0 3px
-            rgba(255, 255, 255, 0.10);
+            rgba(255, 255, 255, 0.06);
+    }
+
+    div[data-baseweb="input"] input {
+
+        background-color: transparent !important;
+
+        color: var(--text-primary) !important;
     }
 
     div[data-baseweb="select"] > div {
 
-        background-color: var(--input-bg);
+        background-color: var(--card-bg) !important;
 
-        border-color: #383838;
+        border: 1px solid var(--border) !important;
 
         border-radius: 10px;
+
+        transition:
+            background-color 0.18s ease,
+            border-color 0.18s ease;
+    }
+
+    div[data-baseweb="select"] > div:hover {
+
+        background-color: var(--hover-bg) !important;
+
+        border-color: var(--border-hover) !important;
     }
 
     input {
@@ -574,7 +599,7 @@ st.markdown(
 
     div[data-baseweb="input"] input {
 
-        background-color: transparent;
+        background-color: transparent !important;
 
         color: var(--text-primary) !important;
     }
@@ -696,8 +721,7 @@ st.markdown(
 
     div[data-testid="stDataFrame"] {
 
-        border:
-            1px solid var(--border);
+        border: 1px solid var(--border) !important;
 
         border-radius: 14px;
 
@@ -705,12 +729,19 @@ st.markdown(
 
         margin-top: 10px;
 
-        background-color: #171717;
+        background-color: var(--card-bg) !important;
     }
 
     [data-testid="stDataFrame"] [role="grid"] {
 
         font-size: 0.9rem;
+
+        background-color: var(--card-bg) !important;
+    }
+
+    [data-testid="stDataFrame"] canvas {
+
+        background-color: var(--card-bg) !important;
     }
 
 
@@ -720,14 +751,18 @@ st.markdown(
 
     div[data-testid="stDataEditor"] {
 
-        border:
-            1px solid var(--border);
+        border: 1px solid var(--border) !important;
 
         border-radius: 14px;
 
         overflow: hidden;
 
-        background-color: #171717;
+        background-color: var(--card-bg) !important;
+    }
+
+    [data-testid="stDataEditor"] canvas {
+
+        background-color: var(--card-bg) !important;
     }
 
 
@@ -1322,15 +1357,14 @@ st.markdown(
 
 st.markdown(
     '<div class="hero-title">'
-    'Understand where your money goes.'
+    'Manage expenses and analyze spending.'
     '</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
     '<div class="hero-subtitle">'
-    'AI-powered expense categorization with intelligent '
-    'spending analytics.'
+    'Expense management, automatic categorization, and spending analytics.'
     '</div>',
     unsafe_allow_html=True
 )
@@ -1453,7 +1487,7 @@ with st.sidebar:
 
 
     if st.button(
-        "↶  Recently Deleted",
+        "Recently Deleted",
         use_container_width=True,
         type=button_type,
         key="sidebar_recently_deleted"
@@ -1466,6 +1500,54 @@ with st.sidebar:
         st.session_state.confirm_delete = False
 
         st.rerun()
+
+
+    # --------------------------------------------------------
+    # LEGAL
+    # --------------------------------------------------------
+
+    st.markdown(
+        '<div class="sidebar-section">Legal</div>',
+        unsafe_allow_html=True
+    )
+
+
+    legal_items = [
+        "Privacy Policy",
+        "Terms & Conditions"
+    ]
+
+
+    for legal_page in legal_items:
+
+        is_selected = (
+            st.session_state.selected_page
+            == legal_page
+        )
+
+        button_type = (
+            "primary"
+            if is_selected
+            else "secondary"
+        )
+
+        if st.button(
+            legal_page,
+            use_container_width=True,
+            type=button_type,
+            key=(
+                "sidebar_"
+                + legal_page.lower()
+                .replace(" ", "_")
+                .replace("&", "and")
+            )
+        ):
+
+            st.session_state.selected_page = legal_page
+
+            st.session_state.confirm_delete = False
+
+            st.rerun()
 
 
     # --------------------------------------------------------
@@ -2253,7 +2335,7 @@ elif page == "Expenses":
                         "description"
                     ]
                 )
-                + " — Rs. "
+                + " - Rs. "
                 + format(
                     float(
                         delete_lookup[
@@ -2545,7 +2627,7 @@ elif page == "Recently Deleted":
                         "description"
                     ]
                 )
-                + " — Rs. "
+                + " - Rs. "
                 + format(
                     float(
                         deleted_lookup[
@@ -2589,6 +2671,141 @@ elif page == "Recently Deleted":
                 st.error(
                     message
                 )
+
+
+# ============================================================
+# PRIVACY POLICY
+# ============================================================
+
+elif page == "Privacy Policy":
+
+    st.markdown(
+        '<div class="section-label">'
+        'Privacy Policy'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.subheader("SmartSpend Privacy Policy")
+
+    st.caption(
+        "Last updated: September 2026"
+    )
+
+    st.write(
+        "This page explains how SmartSpend handles information entered into the application. "
+        "The policy is written for this project demonstration and should be replaced with the "
+        "organisation's final legal policy before public commercial use."
+    )
+
+    with st.expander("1. Information stored"):
+        st.write(
+            "SmartSpend stores expense information needed to provide its features. "
+            "This can include expense descriptions, amounts, categories, confidence scores, "
+            "creation timestamps, and deletion timestamps."
+        )
+
+    with st.expander("2. How information is used"):
+        st.write(
+            "Stored expense information is used to categorize expenses, display expense history, "
+            "calculate spending summaries, generate analytics, and support restoration of deleted expenses."
+        )
+
+    with st.expander("3. Machine learning"):
+        st.write(
+            "Expense descriptions may be processed by the local machine learning model used by SmartSpend "
+            "to predict an expense category and calculate a confidence score."
+        )
+
+    with st.expander("4. Deleted expenses"):
+        st.write(
+            "Deleted expenses are kept in Recently Deleted for up to 15 days so they can be restored. "
+            "After the retention period, the backend permanently removes them."
+        )
+
+    with st.expander("5. Data sharing"):
+        st.write(
+            "This project does not intentionally sell or share expense records with third parties. "
+            "Any public deployment should document the actual hosting providers, services, and integrations used."
+        )
+
+    with st.expander("6. Security"):
+        st.write(
+            "SmartSpend uses application and database controls appropriate for the current project. "
+            "A production deployment should use HTTPS, authentication, access controls, secure secrets, "
+            "backups, and a managed database where appropriate."
+        )
+
+    with st.expander("7. Contact"):
+        st.write(
+            "For questions about this project, use the contact details supplied by the project owner or organisation."
+        )
+
+
+# ============================================================
+# TERMS & CONDITIONS
+# ============================================================
+
+elif page == "Terms & Conditions":
+
+    st.markdown(
+        '<div class="section-label">'
+        'Terms & Conditions'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.subheader("SmartSpend Terms & Conditions")
+
+    st.caption(
+        "Last updated: September 2026"
+    )
+
+    st.write(
+        "These terms describe the intended use of the SmartSpend project. "
+        "They are suitable as project documentation, not as a substitute for a reviewed legal agreement."
+    )
+
+    with st.expander("1. Intended use"):
+        st.write(
+            "SmartSpend is intended to help users record expenses, categorize them, review spending, "
+            "and understand historical spending patterns."
+        )
+
+    with st.expander("2. AI predictions"):
+        st.write(
+            "Expense categories and confidence scores are generated by a machine learning model. "
+            "Predictions can be incorrect and should be reviewed by the user before being relied upon."
+        )
+
+    with st.expander("3. Analytics"):
+        st.write(
+            "Analytics and projections are informational tools based on the data available to the application. "
+            "They are not financial advice."
+        )
+
+    with st.expander("4. User responsibility"):
+        st.write(
+            "Users are responsible for the accuracy of information they enter and for reviewing expense records "
+            "before making financial decisions."
+        )
+
+    with st.expander("5. Deleted expenses"):
+        st.write(
+            "Deleted expenses may be restored during the 15-day Recently Deleted retention period. "
+            "Once permanently removed, they cannot be restored through the application."
+        )
+
+    with st.expander("6. Availability"):
+        st.write(
+            "The project may be unavailable during maintenance, development, deployment changes, or technical failures. "
+            "No uninterrupted availability is guaranteed by this project version."
+        )
+
+    with st.expander("7. Changes"):
+        st.write(
+            "These terms may be updated as SmartSpend changes. The displayed update date should be revised whenever the policy changes."
+        )
 
 
 # ============================================================
@@ -2739,7 +2956,7 @@ elif page == "Analytics":
                 st.caption(
                     "Monday, "
                     + start_date
-                    + " — Sunday, "
+                    + " to Sunday, "
                     + end_date
                 )
 

@@ -1,0 +1,42 @@
+[theme]
+
+base = "dark"
+
+primaryColor = "#FFFFFF"
+
+backgroundColor = "#151515"
+
+secondaryBackgroundColor = "#1B1B1B"
+
+textColor = "#FFFFFF"
+
+borderColor = "#303030"
+
+dataframeBorderColor = "#303030"
+
+dataframeHeaderBackgroundColor = "#1B1B1B"
+
+showWidgetBorder = true
+
+baseRadius = "medium"
+
+buttonRadius = "medium"
+
+
+[theme.sidebar]
+
+backgroundColor = "#101010"
+
+secondaryBackgroundColor = "#1B1B1B"
+
+primaryColor = "#FFFFFF"
+
+textColor = "#FFFFFF"
+
+borderColor = "#303030"
+
+dataframeBorderColor = "#303030"
+
+dataframeHeaderBackgroundColor = "#1B1B1B"
+
+showWidgetBorder = true

@@ -112,7 +112,8 @@ def initialize_database():
             category TEXT NOT NULL,
             confidence REAL NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
-            deleted_at TEXT
+            deleted_at TEXT,
+            is_essential INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -182,6 +183,27 @@ def initialize_database():
             """
         )
 
+    # Mark essential or unexpected expenses separately.
+    # Existing expenses remain regular by default.
+    if "is_essential" not in columns:
+
+        cursor.execute(
+            """
+            ALTER TABLE expenses
+            ADD COLUMN is_essential INTEGER NOT NULL DEFAULT 0
+            """
+        )
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS budget_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            monthly_budget REAL NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
     connection.commit()
 
     connection.close()
@@ -205,6 +227,8 @@ class ExpenseRequest(BaseModel):
         gt=0
     )
 
+    is_essential: bool = False
+
 
 class ExpenseTableItem(BaseModel):
 
@@ -219,10 +243,20 @@ class ExpenseTableItem(BaseModel):
         gt=0
     )
 
+    is_essential: bool = False
+
 
 class ExpenseTableUpdate(BaseModel):
 
     expenses: List[ExpenseTableItem]
+
+
+class BudgetRequest(BaseModel):
+
+    monthly_budget: float = Field(
+        gt=0,
+        le=100000000
+    )
 
 
 # ============================================================
@@ -396,16 +430,18 @@ def predict_expense(
             amount,
             category,
             confidence,
-            created_at
+            created_at,
+            is_essential
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             expense.description,
             expense.amount,
             category,
             confidence,
-            created_at
+            created_at,
+            int(expense.is_essential)
         )
     )
 
@@ -424,7 +460,8 @@ def predict_expense(
             confidence,
             2
         ),
-        "created_at": created_at
+        "created_at": created_at,
+        "is_essential": expense.is_essential
     }
 
 
@@ -449,7 +486,8 @@ def get_expenses():
             amount,
             category,
             confidence,
-            created_at
+            created_at,
+            is_essential
         FROM expenses
         WHERE deleted_at IS NULL
         ORDER BY id DESC
@@ -471,7 +509,8 @@ def get_expenses():
                 "amount": row["amount"],
                 "category": row["category"],
                 "confidence": row["confidence"],
-                "created_at": row["created_at"]
+                "created_at": row["created_at"],
+                "is_essential": bool(row["is_essential"])
             }
         )
 
@@ -502,7 +541,8 @@ def get_deleted_expenses():
             category,
             confidence,
             created_at,
-            deleted_at
+            deleted_at,
+            is_essential
         FROM expenses
         WHERE deleted_at IS NOT NULL
         ORDER BY deleted_at DESC
@@ -593,6 +633,10 @@ def update_expense_table(
             "created_at"
         ]
 
+        old_is_essential = bool(
+            existing["is_essential"]
+        )
+
 
         # ----------------------------------------------------
         # DETERMINE IF DESCRIPTION CHANGED
@@ -634,7 +678,8 @@ def update_expense_table(
                 description = ?,
                 amount = ?,
                 category = ?,
-                confidence = ?
+                confidence = ?,
+                is_essential = ?
             WHERE id = ?
             """,
             (
@@ -642,6 +687,7 @@ def update_expense_table(
                 expense.amount,
                 new_category,
                 new_confidence,
+                int(expense.is_essential),
                 expense.id
             )
         )
@@ -661,7 +707,8 @@ def update_expense_table(
                     float(new_confidence),
                     2
                 ),
-                "created_at": created_at
+                "created_at": created_at,
+                "is_essential": expense.is_essential
             }
         )
 
@@ -807,7 +854,31 @@ def get_summary():
             COALESCE(
                 SUM(amount),
                 0
-            ) AS total_spending
+            ) AS total_spending,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN is_essential = 0 THEN amount
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS regular_spending,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN is_essential = 1 THEN amount
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS essential_spending,
+            SUM(
+                CASE
+                    WHEN is_essential = 1 THEN 1
+                    ELSE 0
+                END
+            ) AS essential_expenses
         FROM expenses
         WHERE deleted_at IS NULL
         """
@@ -858,7 +929,224 @@ def get_summary():
             float(totals["total_spending"]),
             2
         ),
+        "regular_spending": round(
+            float(totals["regular_spending"]),
+            2
+        ),
+        "essential_spending": round(
+            float(totals["essential_spending"]),
+            2
+        ),
+        "essential_expenses": int(
+            totals["essential_expenses"] or 0
+        ),
         "categories": categories
+    }
+
+
+# ============================================================
+# BUDGET
+# ============================================================
+
+def get_current_month_budget():
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT monthly_budget
+        FROM budget_settings
+        WHERE id = 1
+        """
+    )
+
+    row = cursor.fetchone()
+    connection.close()
+
+    if row is None:
+        return 0.0
+
+    return float(row["monthly_budget"])
+
+
+@app.get("/budget")
+def get_budget():
+
+    purge_expired_deleted_expenses()
+
+    now = datetime.now(NEPAL_TZ)
+    rows = load_expense_rows()
+
+    monthly_budget = get_current_month_budget()
+
+    month_rows = []
+
+    for row in rows:
+        try:
+            created_at = datetime.fromisoformat(
+                row["created_at"]
+            )
+
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(
+                    tzinfo=NEPAL_TZ
+                )
+
+            created_at = created_at.astimezone(
+                NEPAL_TZ
+            )
+
+            if (
+                created_at.year == now.year
+                and created_at.month == now.month
+            ):
+                month_rows.append(row)
+
+        except Exception:
+            continue
+
+    regular_spending = sum(
+        float(row["amount"])
+        for row in month_rows
+        if not bool(row["is_essential"])
+    )
+
+    essential_spending = sum(
+        float(row["amount"])
+        for row in month_rows
+        if bool(row["is_essential"])
+    )
+
+    total_spending = regular_spending + essential_spending
+
+    remaining = max(
+        0.0,
+        monthly_budget - regular_spending
+    )
+
+    usage_percent = (
+        (regular_spending / monthly_budget) * 100
+        if monthly_budget > 0
+        else 0
+    )
+
+    days_in_month = (
+        datetime(
+            now.year,
+            now.month % 12 + 1 if now.month < 12 else 1,
+            1,
+            tzinfo=NEPAL_TZ
+        )
+        - datetime(
+            now.year,
+            now.month,
+            1,
+            tzinfo=NEPAL_TZ
+        )
+    ).days if now.month < 12 else (
+        datetime(now.year + 1, 1, 1, tzinfo=NEPAL_TZ)
+        - datetime(now.year, 12, 1, tzinfo=NEPAL_TZ)
+    ).days
+
+    days_elapsed = now.day
+    days_remaining = max(
+        0,
+        days_in_month - days_elapsed
+    )
+
+    daily_average = (
+        regular_spending / days_elapsed
+        if days_elapsed > 0
+        else 0
+    )
+
+    projected_spending = (
+        daily_average * days_in_month
+        if regular_spending > 0
+        else 0
+    )
+
+    if monthly_budget <= 0:
+        status = "Not set"
+        alert = "Set a monthly budget to start tracking spending."
+    elif regular_spending > monthly_budget:
+        status = "Over budget"
+        alert = (
+            "Your regular spending has exceeded your monthly budget by Rs. "
+            + format(regular_spending - monthly_budget, ",.2f")
+            + "."
+        )
+    elif usage_percent >= 90:
+        status = "Near limit"
+        alert = "You are very close to your monthly budget limit."
+    elif usage_percent >= 70:
+        status = "Watch spending"
+        alert = "You have used 70% or more of your monthly budget."
+    else:
+        status = "On track"
+        alert = "Your spending is currently within your budget."
+
+    projected_over_budget = max(
+        0.0,
+        projected_spending - monthly_budget
+    ) if monthly_budget > 0 else 0.0
+
+    return {
+        "monthly_budget": round(monthly_budget, 2),
+        "spent": round(regular_spending, 2),
+        "regular_spending": round(regular_spending, 2),
+        "essential_spending": round(essential_spending, 2),
+        "total_spending": round(total_spending, 2),
+        "remaining": round(remaining, 2),
+        "usage_percent": round(usage_percent, 2),
+        "status": status,
+        "alert": alert,
+        "projected_spending": round(projected_spending, 2),
+        "projected_over_budget": round(projected_over_budget, 2),
+        "days_elapsed": days_elapsed,
+        "days_remaining": days_remaining,
+        "essential_expenses": sum(
+            1
+            for row in month_rows
+            if bool(row["is_essential"])
+        )
+    }
+
+
+@app.put("/budget")
+def update_budget(request: BudgetRequest):
+
+    now = datetime.now(NEPAL_TZ).isoformat()
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO budget_settings (
+            id, monthly_budget, updated_at
+        )
+        VALUES (1, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            monthly_budget = excluded.monthly_budget,
+            updated_at = excluded.updated_at
+        """,
+        (
+            request.monthly_budget,
+            now
+        )
+    )
+
+    connection.commit()
+    connection.close()
+
+    return {
+        "message": "Monthly budget updated successfully.",
+        "monthly_budget": round(
+            request.monthly_budget,
+            2
+        )
     }
 
 
@@ -882,7 +1170,8 @@ def load_expense_rows():
             amount,
             category,
             confidence,
-            created_at
+            created_at,
+            is_essential
         FROM expenses
         WHERE deleted_at IS NULL
         ORDER BY created_at ASC
@@ -962,7 +1251,10 @@ def get_highest_expense(rows):
             float(highest["confidence"]),
             2
         ),
-        "created_at": highest["created_at"]
+        "created_at": highest["created_at"],
+        "is_essential": bool(
+            highest["is_essential"]
+        )
     }
 
 
@@ -1310,6 +1602,22 @@ def monthly_analytics(
             average_expense,
             2
         ),
+        "regular_spending": round(
+            sum(
+                float(row["amount"])
+                for row in matching_rows
+                if not bool(row["is_essential"])
+            ),
+            2
+        ),
+        "essential_spending": round(
+            sum(
+                float(row["amount"])
+                for row in matching_rows
+                if bool(row["is_essential"])
+            ),
+            2
+        ),
         "categories": categories,
         "category_statistics": category_statistics,
         "most_spent_category": most_spent_category,
@@ -1333,23 +1641,27 @@ def weekly_analytics():
 
     current_date = now.date()
 
-    monday = current_date - timedelta(
-        days=current_date.weekday()
+    days_since_sunday = (
+        current_date.weekday() + 1
+    ) % 7
+
+    sunday = current_date - timedelta(
+        days=days_since_sunday
     )
 
-    sunday = monday + timedelta(
+    saturday = sunday + timedelta(
         days=6
     )
 
 
     week_start = datetime.combine(
-        monday,
+        sunday,
         datetime.min.time(),
         tzinfo=NEPAL_TZ
     )
 
     week_end = datetime.combine(
-        sunday,
+        saturday,
         datetime.max.time(),
         tzinfo=NEPAL_TZ
     )
@@ -1445,7 +1757,7 @@ def weekly_analytics():
     for day_offset in range(7):
 
         current_day = (
-            monday
+            sunday
             + timedelta(
                 days=day_offset
             )
@@ -1562,10 +1874,10 @@ def weekly_analytics():
 
 
     return {
-        "week_start": monday.strftime(
+        "week_start": sunday.strftime(
             "%Y-%m-%d"
         ),
-        "week_end": sunday.strftime(
+        "week_end": saturday.strftime(
             "%Y-%m-%d"
         ),
         "total_expenses": total_expenses,
@@ -1575,6 +1887,22 @@ def weekly_analytics():
         ),
         "average_expense": round(
             average_expense,
+            2
+        ),
+        "regular_spending": round(
+            sum(
+                float(row["amount"])
+                for row in matching_rows
+                if not bool(row["is_essential"])
+            ),
+            2
+        ),
+        "essential_spending": round(
+            sum(
+                float(row["amount"])
+                for row in matching_rows
+                if bool(row["is_essential"])
+            ),
             2
         ),
         "categories": categories,

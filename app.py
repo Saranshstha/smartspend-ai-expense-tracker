@@ -70,9 +70,9 @@ st.markdown(
         margin: 0;
         padding: 2.5rem 3.5rem 4rem;
 
-    transition:
-        padding 0.2s ease;  
-}
+        transition:
+            padding 0.2s ease;
+    }
 
     header[data-testid="stHeader"] {
         background: transparent;
@@ -1090,7 +1090,8 @@ def get_summary():
 
 def add_expense(
     description,
-    amount
+    amount,
+    is_essential=False
 ):
 
     try:
@@ -1099,7 +1100,8 @@ def add_expense(
             API_URL + "/predict",
             json={
                 "description": description,
-                "amount": amount
+                "amount": amount,
+                "is_essential": is_essential
             },
             timeout=10
         )
@@ -1168,6 +1170,55 @@ def save_table_changes(
 
     except requests.RequestException:
 
+        return (
+            False,
+            "FastAPI backend could not be reached."
+        )
+
+
+def get_budget():
+
+    try:
+        response = requests.get(
+            API_URL + "/budget",
+            timeout=5
+        )
+
+        response.raise_for_status()
+
+        return response.json()
+
+    except requests.RequestException:
+        return None
+
+
+def save_budget(monthly_budget):
+
+    try:
+        response = requests.put(
+            API_URL + "/budget",
+            json={
+                "monthly_budget": monthly_budget
+            },
+            timeout=5
+        )
+
+        response.raise_for_status()
+
+        return True, response.json()
+
+    except requests.HTTPError:
+        try:
+            detail = response.json().get(
+                "detail",
+                "Unable to update budget."
+            )
+        except Exception:
+            detail = "Unable to update budget."
+
+        return False, detail
+
+    except requests.RequestException:
         return (
             False,
             "FastAPI backend could not be reached."
@@ -1364,7 +1415,6 @@ st.markdown(
 
 st.markdown(
     '<div class="hero-subtitle">'
-    'Expense management, automatic categorization, and spending analytics.'
     '</div>',
     unsafe_allow_html=True
 )
@@ -1426,7 +1476,8 @@ with st.sidebar:
         ("Dashboard", "⌂"),
         ("Add Expense", "＋"),
         ("Expenses", "▤"),
-        ("Analytics", "◫")
+        ("Analytics", "◫"),
+        ("Budget", "◈")
     ]
 
 
@@ -1493,9 +1544,7 @@ with st.sidebar:
         key="sidebar_recently_deleted"
     ):
 
-        st.session_state.selected_page = (
-            page_name
-        )
+        st.session_state.selected_page = page_name
 
         st.session_state.confirm_delete = False
 
@@ -1627,12 +1676,8 @@ if page == "Dashboard":
             average_expense = 0
 
 
-        # ----------------------------------------------------
-        # METRICS
-        # ----------------------------------------------------
-
-        metric1, metric2, metric3 = st.columns(
-            3,
+        metric1, metric2, metric3, metric4 = st.columns(
+            4,
             gap="medium"
         )
 
@@ -1666,13 +1711,153 @@ if page == "Dashboard":
                 )
             )
 
+        with metric4:
+
+            st.metric(
+                "Essential Spending",
+                "Rs. {:,.2f}".format(
+                    summary.get(
+                        "essential_spending",
+                        0
+                    )
+                )
+            )
+
+
+        budget = get_budget()
+
+        if budget is not None and budget.get("monthly_budget", 0) > 0:
+
+            st.markdown(
+                '<div class="section-label">'
+                'Budget Status'
+                '</div>',
+                unsafe_allow_html=True
+            )
+
+            budget_col1, budget_col2, budget_col3, budget_col4 = st.columns(
+                4,
+                gap="medium"
+            )
+
+            with budget_col1:
+                st.metric(
+                    "Monthly Budget",
+                    "Rs. {:,.2f}".format(
+                        budget["monthly_budget"]
+                    )
+                )
+
+            with budget_col2:
+                st.metric(
+                    "Remaining",
+                    "Rs. {:,.2f}".format(
+                        budget["remaining"]
+                    )
+                )
+
+            with budget_col3:
+                st.metric(
+                    "Budget Used",
+                    "{:.1f}%".format(
+                        budget["usage_percent"]
+                    )
+                )
+
+            st.caption(
+                "Regular spending is what counts toward the monthly budget. "
+                "Essential / unexpected spending is tracked separately."
+            )
+
+            if budget["status"] == "Over budget":
+                st.error(budget["alert"])
+            elif budget["status"] in (
+                "Near limit",
+                "Watch spending"
+            ):
+                st.warning(budget["alert"])
+            else:
+                st.success(budget["alert"])
+
+
+        essential_total = float(
+            summary.get(
+                "essential_spending",
+                0
+            )
+        )
+
+        essential_count = int(
+            summary.get(
+                "essential_expenses",
+                0
+            )
+        )
 
         st.divider()
 
+        st.markdown(
+            '<div class="section-label">'
+            'Essential & Unexpected'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
-        # ----------------------------------------------------
-        # SPENDING BY CATEGORY
-        # ----------------------------------------------------
+        st.caption(
+            "Important expenses are shown separately from regular spending."
+        )
+
+        if essential_total > 0:
+            st.metric(
+                "Essential Spending",
+                "Rs. {:,.2f}".format(
+                    essential_total
+                ),
+                str(essential_count) + " expense"
+                + ("" if essential_count == 1 else "s")
+            )
+
+            essential_rows = expenses[
+                expenses.get(
+                    "is_essential",
+                    False
+                ).fillna(False).astype(bool)
+            ].copy() if "is_essential" in expenses.columns else pd.DataFrame()
+
+            if not essential_rows.empty:
+                essential_display = essential_rows[
+                    [
+                        "description",
+                        "amount",
+                        "category"
+                    ]
+                ].rename(
+                    columns={
+                        "description": "Expense",
+                        "amount": "Amount (Rs.)",
+                        "category": "Category"
+                    }
+                )
+
+                essential_display[
+                    "Amount (Rs.)"
+                ] = essential_display[
+                    "Amount (Rs.)"
+                ].round(2)
+
+                st.dataframe(
+                    essential_display.head(5),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        else:
+            st.info(
+                "No essential or unexpected spending recorded."
+            )
+
+
+        st.divider()
+
 
         st.markdown(
             '<div class="section-label">'
@@ -1713,10 +1898,6 @@ if page == "Dashboard":
 
         st.divider()
 
-
-        # ----------------------------------------------------
-        # RECENT EXPENSES
-        # ----------------------------------------------------
 
         st.markdown(
             '<div class="section-label">'
@@ -1799,10 +1980,6 @@ elif page == "Add Expense":
     )
 
 
-    # --------------------------------------------------------
-    # INPUT
-    # --------------------------------------------------------
-
     with input_col:
 
         description = st.text_input(
@@ -1820,6 +1997,20 @@ elif page == "Add Expense":
             key="amount_input"
         )
 
+        spending_type = st.radio(
+            "Spending Type",
+            [
+                "Regular Spending",
+                "Essential / Unexpected"
+            ],
+            index=0,
+            horizontal=True,
+            key="spending_type_input"
+        )
+
+        is_essential = (
+            spending_type == "Essential / Unexpected"
+        )
 
         predict_clicked = st.button(
             "Predict Expense",
@@ -1828,10 +2019,6 @@ elif page == "Add Expense":
             key="predict_expense_button"
         )
 
-
-    # --------------------------------------------------------
-    # AI PREDICTION
-    # --------------------------------------------------------
 
     with prediction_col:
 
@@ -1873,6 +2060,15 @@ elif page == "Add Expense":
                 + "%"
             )
 
+            st.caption(
+                "Type: "
+                + (
+                    "Essential / Unexpected"
+                    if prediction.get("is_essential")
+                    else "Regular Spending"
+                )
+            )
+
 
             if prediction.get(
                 "created_at"
@@ -1888,10 +2084,6 @@ elif page == "Add Expense":
                     )
                 )
 
-
-    # --------------------------------------------------------
-    # PREDICTION
-    # --------------------------------------------------------
 
     if predict_clicked:
 
@@ -1913,7 +2105,8 @@ elif page == "Add Expense":
 
             result = add_expense(
                 description.strip(),
-                amount
+                amount,
+                is_essential
             )
 
 
@@ -1970,43 +2163,190 @@ elif page == "Expenses":
 
     else:
 
+        # ====================================================
+        # PREPARE DATA
+        # ====================================================
+
+        expenses = expenses.copy()
+
+
+        expenses["amount"] = pd.to_numeric(
+            expenses["amount"],
+            errors="coerce"
+        )
+
+
+        expenses["confidence"] = pd.to_numeric(
+            expenses["confidence"],
+            errors="coerce"
+        )
+
+
+        expenses["created_at"] = pd.to_datetime(
+            expenses["created_at"],
+            errors="coerce",
+            utc = True
+        ).dt.tz_convert("Asia/Kathmandu")
+
+
+        # ====================================================
+        # FILTER & SORT
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-label">'
+            'Filter & Sort'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+
+        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(
+            [1.7, 1, 1, 1],
+            gap="medium"
+        )
+
+
         # ----------------------------------------------------
         # SEARCH
         # ----------------------------------------------------
 
-        search = st.text_input(
-            "Search expenses",
-            placeholder="Search by description or category",
-            key="expense_search_input"
-        )
+        with filter_col1:
+
+            search = st.text_input(
+                "Search",
+                placeholder="Description or category...",
+                key="expense_search_input"
+            )
 
 
         # ----------------------------------------------------
-        # CATEGORY FILTER
+        # CATEGORY
         # ----------------------------------------------------
 
-        categories = [
-            "All"
-        ] + sorted(
-            expenses[
-                "category"
+        with filter_col2:
+
+            categories = [
+                "All"
+            ] + sorted(
+                expenses[
+                    "category"
+                ]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
+
+
+            selected_category = st.selectbox(
+                "Category",
+                categories,
+                key="expense_category_filter"
+            )
+
+
+        # ----------------------------------------------------
+        # SORT
+        # ----------------------------------------------------
+
+        with filter_col3:
+
+            sort_option = st.selectbox(
+                "Sort by",
+                [
+                    "Newest",
+                    "Oldest",
+                    "Highest amount",
+                    "Lowest amount",
+                    "Highest confidence",
+                    "Lowest confidence"
+                ],
+                key="expense_sort_option"
+            )
+
+        with filter_col4:
+
+            type_options = [
+                "All",
+                "Regular Spending",
+                "Essential / Unexpected"
             ]
-            .dropna()
-            .unique()
-            .tolist()
-        )
+
+            selected_type = st.selectbox(
+                "Spending Type",
+                type_options,
+                key="expense_type_filter"
+            )
 
 
-        selected_category = st.selectbox(
-            "Category",
-            categories,
-            key="expense_category_filter"
+        # ====================================================
+        # SECOND FILTER ROW
+        # ====================================================
+
+        filter_col4, filter_col5, filter_col6 = st.columns(
+            [1, 1, 1],
+            gap="medium"
         )
 
 
         # ----------------------------------------------------
-        # FILTER DATA
+        # DATE
         # ----------------------------------------------------
+
+        with filter_col4:
+
+            date_options = [
+                "All time",
+                "Today",
+                "Last 7 days",
+                "Last 30 days",
+                "This month"
+            ]
+
+
+            selected_date = st.selectbox(
+                "Date",
+                date_options,
+                key="expense_date_filter"
+            )
+
+
+        # ----------------------------------------------------
+        # MINIMUM AMOUNT
+        # ----------------------------------------------------
+
+        with filter_col5:
+
+            minimum_amount = st.number_input(
+                "Minimum amount",
+                min_value=0.0,
+                value=0.0,
+                step=50.0,
+                format="%.2f",
+                key="expense_min_amount"
+            )
+
+
+        # ----------------------------------------------------
+        # MAXIMUM AMOUNT
+        # ----------------------------------------------------
+
+        with filter_col6:
+
+            maximum_amount = st.number_input(
+                "Maximum amount",
+                min_value=0.0,
+                value=0.0,
+                step=50.0,
+                format="%.2f",
+                key="expense_max_amount"
+            )
+
+
+        # ====================================================
+        # APPLY SEARCH
+        # ====================================================
 
         filtered = expenses.copy()
 
@@ -2014,12 +2354,13 @@ elif page == "Expenses":
         if search.strip():
 
             search_lower = (
-                search.strip()
+                search
+                .strip()
                 .lower()
             )
 
 
-            filtered = filtered[
+            description_match = (
                 filtered[
                     "description"
                 ]
@@ -2030,7 +2371,10 @@ elif page == "Expenses":
                     na=False,
                     regex=False
                 )
-                |
+            )
+
+
+            category_match = (
                 filtered[
                     "category"
                 ]
@@ -2041,8 +2385,18 @@ elif page == "Expenses":
                     na=False,
                     regex=False
                 )
+            )
+
+
+            filtered = filtered[
+                description_match
+                | category_match
             ]
 
+
+        # ====================================================
+        # APPLY CATEGORY
+        # ====================================================
 
         if selected_category != "All":
 
@@ -2054,23 +2408,274 @@ elif page == "Expenses":
             ]
 
 
-        # ----------------------------------------------------
+        # ====================================================
+        # APPLY SPENDING TYPE
+        # ====================================================
+
+        if selected_type != "All":
+
+            type_value = (
+                selected_type
+                == "Essential / Unexpected"
+            )
+
+            filtered = filtered[
+                filtered["is_essential"].fillna(False).astype(bool)
+                == type_value
+            ]
+
+
+        # ====================================================
+        # APPLY DATE
+        # ====================================================
+
+        current_time = pd.Timestamp.now(
+            tz="Asia/Kathmandu"
+        )
+
+
+        if selected_date == "Today":
+
+            today = current_time.normalize()
+
+            filtered = filtered[
+                filtered[
+                    "created_at"
+                ] >= today
+            ]
+
+
+        elif selected_date == "Last 7 days":
+
+            seven_days_ago = (
+                current_time
+                - pd.Timedelta(days=7)
+            )
+
+            filtered = filtered[
+                filtered[
+                    "created_at"
+                ] >= seven_days_ago
+            ]
+
+
+        elif selected_date == "Last 30 days":
+
+            thirty_days_ago = (
+                current_time
+                - pd.Timedelta(days=30)
+            )
+
+            filtered = filtered[
+                filtered[
+                    "created_at"
+                ] >= thirty_days_ago
+            ]
+
+
+        elif selected_date == "This month":
+
+            month_start = pd.Timestamp(
+                current_time.year,
+                current_time.month,
+                1,
+                tz="Asia/Kathmandu"
+            )
+
+            filtered = filtered[
+                filtered[
+                    "created_at"
+                ] >= month_start
+            ]
+
+
+        # ====================================================
+        # APPLY AMOUNT RANGE
+        # ====================================================
+
+        if minimum_amount > 0:
+
+            filtered = filtered[
+                filtered[
+                    "amount"
+                ] >= minimum_amount
+            ]
+
+
+        if maximum_amount > 0:
+
+            if maximum_amount < minimum_amount:
+
+                st.warning(
+                    "Maximum amount cannot be lower "
+                    "than minimum amount."
+                )
+
+            else:
+
+                filtered = filtered[
+                    filtered[
+                        "amount"
+                    ] <= maximum_amount
+                ]
+
+
+        # ====================================================
+        # SORT
+        # ====================================================
+
+        if sort_option == "Newest":
+
+            filtered = filtered.sort_values(
+                "created_at",
+                ascending=False
+            )
+
+
+        elif sort_option == "Oldest":
+
+            filtered = filtered.sort_values(
+                "created_at",
+                ascending=True
+            )
+
+
+        elif sort_option == "Highest amount":
+
+            filtered = filtered.sort_values(
+                "amount",
+                ascending=False
+            )
+
+
+        elif sort_option == "Lowest amount":
+
+            filtered = filtered.sort_values(
+                "amount",
+                ascending=True
+            )
+
+
+        elif sort_option == "Highest confidence":
+
+            filtered = filtered.sort_values(
+                "confidence",
+                ascending=False
+            )
+
+
+        elif sort_option == "Lowest confidence":
+
+            filtered = filtered.sort_values(
+                "confidence",
+                ascending=True
+            )
+
+
+        # ====================================================
+        # RESULT SUMMARY
+        # ====================================================
+
+        total_records = len(
+            expenses
+        )
+
+
+        filtered_records = len(
+            filtered
+        )
+
+
+        filtered_total = filtered[
+            "amount"
+        ].sum()
+
+
+        if filtered_records > 0:
+
+            filtered_average = (
+                filtered_total
+                / filtered_records
+            )
+
+        else:
+
+            filtered_average = 0
+
+
+        summary_col1, summary_col2, summary_col3 = (
+            st.columns(
+                3,
+                gap="medium"
+            )
+        )
+
+
+        with summary_col1:
+
+            st.metric(
+                "Showing",
+                str(
+                    filtered_records
+                )
+                + " / "
+                + str(
+                    total_records
+                )
+            )
+
+
+        with summary_col2:
+
+            st.metric(
+                "Filtered Spending",
+                "Rs. {:,.2f}".format(
+                    filtered_total
+                )
+            )
+
+
+        with summary_col3:
+
+            st.metric(
+                "Average",
+                "Rs. {:,.2f}".format(
+                    filtered_average
+                )
+            )
+
+
+        # ====================================================
         # EXPENSE TABLE
-        # ----------------------------------------------------
+        # ====================================================
 
         if len(filtered) == 0:
 
             st.info(
-                "No expenses match your current search/filter."
+                "No expenses match your current "
+                "search and filter settings."
             )
 
 
         else:
 
+            st.divider()
+
+
+            st.markdown(
+                '<div class="section-label">'
+                'Expense Records'
+                '</div>',
+                unsafe_allow_html=True
+            )
+
+
             st.caption(
-                "Edit the Description or Amount directly "
-                "in the table. Category and Confidence are "
-                "generated by the AI model."
+                "Edit Description or Amount directly "
+                "in the table. Category and Confidence "
+                "are generated by the AI model. "
+                "Changing a description will recalculate "
+                "its category when you save the changes."
             )
 
 
@@ -2081,6 +2686,7 @@ elif page == "Expenses":
                     "amount",
                     "category",
                     "confidence",
+                    "is_essential",
                     "created_at"
                 ]
             ].copy()
@@ -2095,6 +2701,7 @@ elif page == "Expenses":
                         "amount": "Amount (Rs.)",
                         "category": "Category",
                         "confidence": "Confidence (%)",
+                        "is_essential": "Type",
                         "created_at": "Date"
                     }
                 )
@@ -2103,45 +2710,67 @@ elif page == "Expenses":
 
             editable_table[
                 "Amount (Rs.)"
-            ] = editable_table[
-                "Amount (Rs.)"
-            ].round(2)
-
-
-            editable_table[
-                "Confidence (%)"
-            ] = editable_table[
-                "Confidence (%)"
-            ].round(2)
-
-
-            editable_table[
-                "Date"
-            ] = pd.to_datetime(
+            ] = (
                 editable_table[
-                    "Date"
-                ],
-                errors="coerce"
-            ).dt.strftime(
-                "%Y-%m-%d %H:%M"
+                    "Amount (Rs.)"
+                ]
+                .round(2)
             )
 
 
-            # ------------------------------------------------
+            editable_table[
+                "Confidence (%)"
+            ] = (
+                editable_table[
+                    "Confidence (%)"
+                ]
+                .round(2)
+            )
+
+
+            editable_table[
+                "Type"
+            ] = editable_table[
+                "Type"
+            ].apply(
+                lambda value:
+                "Essential / Unexpected"
+                if bool(value)
+                else "Regular Spending"
+            )
+
+            editable_table[
+                "Date"
+            ] = (
+                editable_table[
+                    "Date"
+                ]
+                .dt.strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+            )
+
+
+            # =================================================
             # EDITABLE TABLE
-            # ------------------------------------------------
+            # =================================================
 
             edited_table = st.data_editor(
                 editable_table,
+
                 use_container_width=True,
+
                 hide_index=True,
+
                 num_rows="fixed",
+
                 disabled=[
                     "ID",
                     "Category",
                     "Confidence (%)",
                     "Date"
                 ],
+
                 column_config={
 
                     "ID": st.column_config.NumberColumn(
@@ -2173,11 +2802,21 @@ elif page == "Expenses":
                         disabled=True
                     ),
 
+                    "Type": st.column_config.SelectboxColumn(
+                        "Type",
+                        options=[
+                            "Regular Spending",
+                            "Essential / Unexpected"
+                        ],
+                        required=True
+                    ),
+
                     "Date": st.column_config.TextColumn(
                         "Date",
                         disabled=True
                     )
                 },
+
                 key="expense_editor"
             )
 
@@ -2185,9 +2824,9 @@ elif page == "Expenses":
             st.markdown("")
 
 
-            # ------------------------------------------------
+            # =================================================
             # SAVE CHANGES
-            # ------------------------------------------------
+            # =================================================
 
             if st.button(
                 "Save Changes",
@@ -2204,14 +2843,18 @@ elif page == "Expenses":
                 for _, row in edited_table.iterrows():
 
                     description_value = str(
-                        row["Description"]
+                        row[
+                            "Description"
+                        ]
                     ).strip()
 
 
                     try:
 
                         amount_value = float(
-                            row["Amount (Rs.)"]
+                            row[
+                                "Amount (Rs.)"
+                            ]
                         )
 
                     except Exception:
@@ -2254,10 +2897,25 @@ elif page == "Expenses":
                     update_payload.append(
                         {
                             "id": int(
-                                row["ID"]
+                                row[
+                                    "ID"
+                                ]
                             ),
-                            "description": description_value,
-                            "amount": amount_value
+
+                            "description": (
+                                description_value
+                            ),
+
+                            "amount": (
+                                amount_value
+                            ),
+
+                            "is_essential": (
+                                str(
+                                    row["Type"]
+                                ).strip()
+                                == "Essential / Unexpected"
+                            )
                         }
                     )
 
@@ -2285,8 +2943,8 @@ elif page == "Expenses":
                         )
 
                         st.info(
-                            "Descriptions changed in the table "
-                            "were automatically re-categorized "
+                            "Changed descriptions were "
+                            "automatically re-categorized "
                             "by the AI model."
                         )
 
@@ -2300,12 +2958,12 @@ elif page == "Expenses":
                         )
 
 
+        # ====================================================
+        # DELETE EXPENSE
+        # ====================================================
+
         st.divider()
 
-
-        # ----------------------------------------------------
-        # DELETE EXPENSE
-        # ----------------------------------------------------
 
         st.markdown(
             '<div class="section-label">'
@@ -2324,9 +2982,11 @@ elif page == "Expenses":
 
         selected_delete_id = st.selectbox(
             "Select expense to delete",
+
             expenses[
                 "id"
             ].tolist(),
+
             format_func=lambda expense_id: (
                 str(
                     delete_lookup[
@@ -2335,7 +2995,7 @@ elif page == "Expenses":
                         "description"
                     ]
                 )
-                + " - Rs. "
+                + " — Rs. "
                 + format(
                     float(
                         delete_lookup[
@@ -2347,6 +3007,7 @@ elif page == "Expenses":
                     ".2f"
                 )
             ),
+
             key="delete_expense_selector"
         )
 
@@ -2358,6 +3019,10 @@ elif page == "Expenses":
 
             st.session_state.confirm_delete = True
 
+
+        # ====================================================
+        # DELETE CONFIRMATION
+        # ====================================================
 
         if st.session_state.confirm_delete:
 
@@ -2422,6 +3087,176 @@ elif page == "Expenses":
 
 
 # ============================================================
+# BUDGET
+# ============================================================
+
+elif page == "Budget":
+
+    st.markdown(
+        '<div class="section-label">'
+        'Budget & Spending Alerts'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.caption(
+        "Set a monthly limit and get a simple warning before spending gets out of control."
+    )
+
+    budget = get_budget()
+
+    if budget is None:
+
+        st.error(
+            "Unable to retrieve budget information."
+        )
+
+    else:
+
+        current_budget = float(
+            budget.get(
+                "monthly_budget",
+                0
+            )
+        )
+
+        budget_input = st.number_input(
+            "Monthly budget (Rs.)",
+            min_value=1.0,
+            value=max(
+                1.0,
+                current_budget
+            ),
+            step=1000.0,
+            format="%.2f",
+            key="monthly_budget_input"
+        )
+
+        if st.button(
+            "Save Monthly Budget",
+            type="primary",
+            use_container_width=True,
+            key="save_monthly_budget_button"
+        ):
+
+            success, result = save_budget(
+                budget_input
+            )
+
+            if success:
+                st.success(
+                    "Monthly budget saved successfully."
+                )
+                st.rerun()
+            else:
+                st.error(result)
+
+        st.divider()
+
+        if current_budget <= 0:
+
+            st.info(
+                "Set a monthly budget to start tracking your spending."
+            )
+
+        else:
+
+            budget_col1, budget_col2, budget_col3, budget_col4 = st.columns(
+                4,
+                gap="medium"
+            )
+
+            with budget_col1:
+                st.metric(
+                    "Spent This Month",
+                    "Rs. {:,.2f}".format(
+                        budget["spent"]
+                    )
+                )
+
+            with budget_col2:
+                st.metric(
+                    "Remaining",
+                    "Rs. {:,.2f}".format(
+                        budget["remaining"]
+                    )
+                )
+
+            with budget_col3:
+                st.metric(
+                    "Budget Used",
+                    "{:.1f}%".format(
+                        budget["usage_percent"]
+                    )
+                )
+
+            with budget_col4:
+                st.metric(
+                    "Essential Spending",
+                    "Rs. {:,.2f}".format(
+                        budget.get("essential_spending", 0)
+                    )
+                )
+
+            st.progress(
+                min(
+                    budget["usage_percent"] / 100,
+                    1.0
+                )
+            )
+
+            if budget["status"] == "Over budget":
+                st.error(budget["alert"])
+            elif budget["status"] in (
+                "Near limit",
+                "Watch spending"
+            ):
+                st.warning(budget["alert"])
+            else:
+                st.success(budget["alert"])
+
+            st.divider()
+
+            st.markdown(
+                '<div class="section-label">'
+                'Spending Forecast'
+                '</div>',
+                unsafe_allow_html=True
+            )
+
+            forecast_col1, forecast_col2 = st.columns(
+                2,
+                gap="medium"
+            )
+
+            with forecast_col1:
+                st.metric(
+                    "Projected Month-End",
+                    "Rs. {:,.2f}".format(
+                        budget["projected_spending"]
+                    )
+                )
+
+            with forecast_col2:
+                if budget["projected_over_budget"] > 0:
+                    st.metric(
+                        "Projected Over Budget",
+                        "Rs. {:,.2f}".format(
+                            budget["projected_over_budget"]
+                        )
+                    )
+                else:
+                    st.metric(
+                        "Projected Over Budget",
+                        "Rs. 0.00"
+                    )
+
+            st.caption(
+                "Forecast uses your average daily spending so far this month."
+            )
+
+
+# ============================================================
 # RECENTLY DELETED
 # ============================================================
 
@@ -2458,10 +3293,6 @@ elif page == "Recently Deleted":
 
 
     else:
-
-        # ----------------------------------------------------
-        # DATE PROCESSING
-        # ----------------------------------------------------
 
         deleted_expenses[
             "deleted_at"
@@ -2516,10 +3347,6 @@ elif page == "Recently Deleted":
         )
 
 
-        # ----------------------------------------------------
-        # METRICS
-        # ----------------------------------------------------
-
         total_deleted = len(
             deleted_expenses
         )
@@ -2562,10 +3389,6 @@ elif page == "Recently Deleted":
         st.divider()
 
 
-        # ----------------------------------------------------
-        # DELETED TABLE
-        # ----------------------------------------------------
-
         display_deleted = deleted_expenses[
             [
                 "description",
@@ -2588,9 +3411,12 @@ elif page == "Recently Deleted":
 
         display_deleted[
             "Amount (Rs.)"
-        ] = display_deleted[
-            "Amount (Rs.)"
-        ].round(2)
+        ] = (
+            display_deleted[
+                "Amount (Rs.)"
+            ]
+            .round(2)
+        )
 
 
         st.dataframe(
@@ -2603,10 +3429,6 @@ elif page == "Recently Deleted":
         st.divider()
 
 
-        # ----------------------------------------------------
-        # RESTORE
-        # ----------------------------------------------------
-
         deleted_lookup = (
             deleted_expenses
             .set_index("id")
@@ -2616,9 +3438,11 @@ elif page == "Recently Deleted":
 
         restore_id = st.selectbox(
             "Select expense to restore",
+
             deleted_expenses[
                 "id"
             ].tolist(),
+
             format_func=lambda expense_id: (
                 str(
                     deleted_lookup[
@@ -2639,6 +3463,7 @@ elif page == "Recently Deleted":
                     ".2f"
                 )
             ),
+
             key="restore_expense_selector"
         )
 
@@ -2686,59 +3511,99 @@ elif page == "Privacy Policy":
         unsafe_allow_html=True
     )
 
-    st.subheader("SmartSpend Privacy Policy")
+    st.subheader(
+        "SmartSpend Privacy Policy"
+    )
 
     st.caption(
         "Last updated: September 2026"
     )
 
     st.write(
-        "This page explains how SmartSpend handles information entered into the application. "
-        "The policy is written for this project demonstration and should be replaced with the "
-        "organisation's final legal policy before public commercial use."
+        "This page explains how SmartSpend handles information entered "
+        "into the application. The policy is written for this project "
+        "demonstration and should be replaced with the organisation's "
+        "final legal policy before public commercial use."
     )
 
-    with st.expander("1. Information stored"):
+    with st.expander(
+        "1. Information stored"
+    ):
+
         st.write(
-            "SmartSpend stores expense information needed to provide its features. "
-            "This can include expense descriptions, amounts, categories, confidence scores, "
-            "creation timestamps, and deletion timestamps."
+            "SmartSpend stores expense information needed to provide "
+            "its features. This can include expense descriptions, "
+            "amounts, categories, confidence scores, creation "
+            "timestamps, and deletion timestamps."
         )
 
-    with st.expander("2. How information is used"):
+
+    with st.expander(
+        "2. How information is used"
+    ):
+
         st.write(
-            "Stored expense information is used to categorize expenses, display expense history, "
-            "calculate spending summaries, generate analytics, and support restoration of deleted expenses."
+            "Stored expense information is used to categorize expenses, "
+            "display expense history, calculate spending summaries, "
+            "generate analytics, and support restoration of deleted "
+            "expenses."
         )
 
-    with st.expander("3. Machine learning"):
+
+    with st.expander(
+        "3. Machine learning"
+    ):
+
         st.write(
-            "Expense descriptions may be processed by the local machine learning model used by SmartSpend "
-            "to predict an expense category and calculate a confidence score."
+            "Expense descriptions may be processed by the local "
+            "machine learning model used by SmartSpend to predict "
+            "an expense category and calculate a confidence score."
         )
 
-    with st.expander("4. Deleted expenses"):
+
+    with st.expander(
+        "4. Deleted expenses"
+    ):
+
         st.write(
-            "Deleted expenses are kept in Recently Deleted for up to 15 days so they can be restored. "
-            "After the retention period, the backend permanently removes them."
+            "Deleted expenses are kept in Recently Deleted for up "
+            "to 15 days so they can be restored. After the retention "
+            "period, the backend permanently removes them."
         )
 
-    with st.expander("5. Data sharing"):
+
+    with st.expander(
+        "5. Data sharing"
+    ):
+
         st.write(
-            "This project does not intentionally sell or share expense records with third parties. "
-            "Any public deployment should document the actual hosting providers, services, and integrations used."
+            "This project does not intentionally sell or share "
+            "expense records with third parties. Any public "
+            "deployment should document the actual hosting "
+            "providers, services, and integrations used."
         )
 
-    with st.expander("6. Security"):
+
+    with st.expander(
+        "6. Security"
+    ):
+
         st.write(
-            "SmartSpend uses application and database controls appropriate for the current project. "
-            "A production deployment should use HTTPS, authentication, access controls, secure secrets, "
-            "backups, and a managed database where appropriate."
+            "SmartSpend uses application and database controls "
+            "appropriate for the current project. A production "
+            "deployment should use HTTPS, authentication, access "
+            "controls, secure secrets, backups, and a managed "
+            "database where appropriate."
         )
 
-    with st.expander("7. Contact"):
+
+    with st.expander(
+        "7. Contact"
+    ):
+
         st.write(
-            "For questions about this project, use the contact details supplied by the project owner or organisation."
+            "For questions about this project, use the contact "
+            "details supplied by the project owner or organisation."
         )
 
 
@@ -2755,56 +3620,96 @@ elif page == "Terms & Conditions":
         unsafe_allow_html=True
     )
 
-    st.subheader("SmartSpend Terms & Conditions")
+    st.subheader(
+        "SmartSpend Terms & Conditions"
+    )
 
     st.caption(
         "Last updated: September 2026"
     )
 
     st.write(
-        "These terms describe the intended use of the SmartSpend project. "
-        "They are suitable as project documentation, not as a substitute for a reviewed legal agreement."
+        "These terms describe the intended use of the SmartSpend "
+        "project. They are suitable as project documentation, "
+        "not as a substitute for a reviewed legal agreement."
     )
 
-    with st.expander("1. Intended use"):
+
+    with st.expander(
+        "1. Intended use"
+    ):
+
         st.write(
-            "SmartSpend is intended to help users record expenses, categorize them, review spending, "
-            "and understand historical spending patterns."
+            "SmartSpend is intended to help users record expenses, "
+            "categorize them, review spending, and understand "
+            "historical spending patterns."
         )
 
-    with st.expander("2. AI predictions"):
+
+    with st.expander(
+        "2. AI predictions"
+    ):
+
         st.write(
-            "Expense categories and confidence scores are generated by a machine learning model. "
-            "Predictions can be incorrect and should be reviewed by the user before being relied upon."
+            "Expense categories and confidence scores are generated "
+            "by a machine learning model. Predictions can be incorrect "
+            "and should be reviewed by the user before being relied upon."
         )
 
-    with st.expander("3. Analytics"):
+
+    with st.expander(
+        "3. Analytics"
+    ):
+
         st.write(
-            "Analytics and projections are informational tools based on the data available to the application. "
-            "They are not financial advice."
+            "Analytics and projections are informational tools based "
+            "on the data available to the application. They are not "
+            "financial advice."
         )
 
-    with st.expander("4. User responsibility"):
+
+    with st.expander(
+        "4. User responsibility"
+    ):
+
         st.write(
-            "Users are responsible for the accuracy of information they enter and for reviewing expense records "
-            "before making financial decisions."
+            "Users are responsible for the accuracy of information "
+            "they enter and for reviewing expense records before "
+            "making financial decisions."
         )
 
-    with st.expander("5. Deleted expenses"):
+
+    with st.expander(
+        "5. Deleted expenses"
+    ):
+
         st.write(
-            "Deleted expenses may be restored during the 15-day Recently Deleted retention period. "
-            "Once permanently removed, they cannot be restored through the application."
+            "Deleted expenses may be restored during the 15-day "
+            "Recently Deleted retention period. Once permanently "
+            "removed, they cannot be restored through the application."
         )
 
-    with st.expander("6. Availability"):
+
+    with st.expander(
+        "6. Availability"
+    ):
+
         st.write(
-            "The project may be unavailable during maintenance, development, deployment changes, or technical failures. "
-            "No uninterrupted availability is guaranteed by this project version."
+            "The project may be unavailable during maintenance, "
+            "development, deployment changes, or technical failures. "
+            "No uninterrupted availability is guaranteed by this "
+            "project version."
         )
 
-    with st.expander("7. Changes"):
+
+    with st.expander(
+        "7. Changes"
+    ):
+
         st.write(
-            "These terms may be updated as SmartSpend changes. The displayed update date should be revised whenever the policy changes."
+            "These terms may be updated as SmartSpend changes. "
+            "The displayed update date should be revised whenever "
+            "the policy changes."
         )
 
 
@@ -2814,108 +3719,391 @@ elif page == "Terms & Conditions":
 
 elif page == "Analytics":
 
+    # ========================================================
+    # HEADER
+    # ========================================================
+
     st.markdown(
         '<div class="section-label">'
-        'Spending Analytics'
+        'Spending Analytics {Present to whole year}'
         '</div>',
         unsafe_allow_html=True
     )
 
 
-    now = datetime.now()
+
+    # ========================================================
+    # LOAD DATA ONCE
+    # ========================================================
+
+    expenses = get_expenses()
+
+    if expenses is None:
+
+        st.error(
+            "Unable to retrieve expense data."
+        )
+
+    else:
+
+        expenses = expenses.copy()
 
 
-    # --------------------------------------------------------
-    # SELECTORS
-    # --------------------------------------------------------
+        # ====================================================
+        # PREPARE DATA
+        # ====================================================
 
-    selector_col1, selector_col2, selector_col3 = (
-        st.columns(
+        if not expenses.empty:
+
+            expenses["amount"] = pd.to_numeric(
+                expenses["amount"],
+                errors="coerce"
+            ).fillna(0)
+
+
+            expenses["created_at"] = pd.to_datetime(
+                expenses["created_at"],
+                errors="coerce",
+                utc=True
+            ).dt.tz_convert(
+                "Asia/Kathmandu"
+            )
+
+            expenses["is_essential"] = (
+                expenses["is_essential"]
+                .fillna(False)
+                .astype(bool)
+                if "is_essential" in expenses.columns
+                else False
+            )
+
+        else:
+
+            expenses["amount"] = pd.Series(
+                dtype="float64"
+            )
+
+            expenses["created_at"] = pd.Series(
+                dtype="datetime64[ns, Asia/Kathmandu]"
+            )
+
+
+        # ====================================================
+        # CURRENT TIME
+        # ====================================================
+
+        now = pd.Timestamp.now(
+            tz="Asia/Kathmandu"
+        )
+
+        today = now.normalize()
+
+
+        week_start = (
+            today
+            - pd.Timedelta(
+                days=today.weekday()
+            )
+        )
+
+
+        month_start = pd.Timestamp(
+            year=today.year,
+            month=today.month,
+            day=1,
+            tz="Asia/Kathmandu"
+        )
+
+
+        year_start = pd.Timestamp(
+            year=today.year,
+            month=1,
+            day=1,
+            tz="Asia/Kathmandu"
+        )
+
+
+        # ====================================================
+        # HELPER
+        # ====================================================
+
+        def money(value):
+
+            return (
+                "Rs. "
+                + "{:,.2f}".format(
+                    float(value)
+                )
+            )
+
+
+        # ====================================================
+        # TODAY
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-label">'
+            'Today'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        st.caption(
+            "Spending and transactions."
+        )
+
+
+        if expenses.empty:
+
+            today_data = expenses.copy()
+
+        else:
+
+            today_data = expenses[
+                expenses["created_at"] >= today
+            ].copy()
+
+
+        today_total = float(
+            today_data["amount"].sum()
+        )
+
+        today_count = len(
+            today_data
+        )
+
+
+        today_col1, today_col2 = st.columns(
+            2,
+            gap="medium"
+        )
+
+
+        with today_col1:
+
+            st.metric(
+                "Spent Today",
+                money(
+                    today_total
+                )
+            )
+
+
+        with today_col2:
+
+            st.metric(
+                "Transactions",
+                str(
+                    today_count
+                )
+            )
+
+
+        if today_count > 0:
+
+            today_categories = (
+                today_data
+                .groupby("category")["amount"]
+                .sum()
+                .sort_values(
+                    ascending=False
+                )
+            )
+
+
+            top_today_category = (
+                today_categories.index[0]
+            )
+
+
+            top_today_amount = float(
+                today_categories.iloc[0]
+            )
+
+
+            st.caption(
+                "Most spent on "
+                + str(
+                    top_today_category
+                )
+                + " · "
+                + money(
+                    top_today_amount
+                )
+            )
+
+
+            today_highest = today_data.loc[
+                today_data["amount"].idxmax()
+            ]
+
+
+            st.caption(
+                "Biggest transaction: "
+                + str(
+                    today_highest["description"]
+                )
+                + " · "
+                + money(
+                    today_highest["amount"]
+                )
+            )
+
+
+            today_display = today_data[
+                [
+                    "description",
+                    "amount",
+                    "category",
+                    "is_essential"
+                ]
+            ].copy()
+
+
+            today_display = today_display.rename(
+                columns={
+                    "description": "Transaction",
+                    "amount": "Amount (Rs.)",
+                    "category": "Category",
+                    "is_essential": "Type"
+                }
+            )
+
+
+            today_display["Type"] = today_display[
+                "Type"
+            ].apply(
+                lambda value:
+                "Essential"
+                if bool(value)
+                else "Regular"
+            )
+
+            today_display[
+                "Amount (Rs.)"
+            ] = today_display[
+                "Amount (Rs.)"
+            ].round(2)
+
+
+            st.dataframe(
+                today_display,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        else:
+
+            st.info(
+                "No expenses recorded today."
+            )
+
+
+        st.divider()
+
+        # ====================================================
+        # ESSENTIAL / UNEXPECTED SPENDING
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-label">'
+            'Essential & Unexpected'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        st.caption(
+            "Important spending is separated from regular spending."
+        )
+
+        month_data = expenses[
+            expenses["created_at"] >= month_start
+        ].copy()
+
+        month_essential = month_data[
+            month_data["is_essential"]
+        ].copy()
+
+        month_regular = month_data[
+            ~month_data["is_essential"]
+        ].copy()
+
+        essential_col1, essential_col2, essential_col3 = st.columns(
             3,
             gap="medium"
         )
-    )
+
+        with essential_col1:
+            st.metric(
+                "Regular Spending",
+                money(
+                    month_regular["amount"].sum()
+                )
+            )
+
+        with essential_col2:
+            st.metric(
+                "Essential / Unexpected",
+                money(
+                    month_essential["amount"].sum()
+                )
+            )
+
+        with essential_col3:
+            total_month = float(
+                month_data["amount"].sum()
+            )
+            essential_share = (
+                float(month_essential["amount"].sum())
+                / total_month
+                * 100
+                if total_month > 0
+                else 0
+            )
+            st.metric(
+                "Essential Share",
+                "{:.1f}%".format(
+                    essential_share
+                )
+            )
+
+        if not month_essential.empty:
+            essential_display = month_essential[
+                [
+                    "description",
+                    "amount",
+                    "category"
+                ]
+            ].rename(
+                columns={
+                    "description": "Expense",
+                    "amount": "Amount (Rs.)",
+                    "category": "Category"
+                }
+            )
+
+            essential_display[
+                "Amount (Rs.)"
+            ] = essential_display[
+                "Amount (Rs.)"
+            ].round(2)
+
+            st.dataframe(
+                essential_display.head(8),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info(
+                "No essential or unexpected spending recorded this month."
+            )
+
+        st.divider()
 
 
-    with selector_col1:
-
-        selected_year = st.number_input(
-            "Year",
-            min_value=2000,
-            max_value=2100,
-            value=now.year,
-            step=1,
-            key="analytics_year"
-        )
-
-
-    with selector_col2:
-
-        selected_month = st.selectbox(
-            "Month",
-            list(range(1, 13)),
-            index=now.month - 1,
-            format_func=lambda value: datetime(
-                2000,
-                value,
-                1
-            ).strftime(
-                "%B"
-            ),
-            key="analytics_month"
-        )
-
-
-    with selector_col3:
-
-        trend_months = st.selectbox(
-            "Trend period",
-            [
-                3,
-                6,
-                12
-            ],
-            index=1,
-            key="analytics_trend_period"
-        )
-
-
-    # --------------------------------------------------------
-    # GET ANALYTICS
-    # --------------------------------------------------------
-
-    monthly = get_monthly_analytics(
-        int(selected_year),
-        int(selected_month)
-    )
-
-
-    weekly = get_weekly_analytics()
-
-
-    trend = get_monthly_trend(
-        int(trend_months)
-    )
-
-
-    comparison = get_monthly_comparison(
-        int(selected_year),
-        int(selected_month)
-    )
-
-
-    # ========================================================
-    # WEEKLY ANALYTICS
-    # ========================================================
-
-    if weekly is None:
-
-        st.warning(
-            "Weekly analytics are currently unavailable."
-        )
-
-
-    else:
+        # ====================================================
+        # THIS WEEK
+        # ====================================================
 
         st.markdown(
             '<div class="section-label">'
@@ -2924,168 +4112,80 @@ elif page == "Analytics":
             unsafe_allow_html=True
         )
 
-
-        week_start = weekly.get(
-            "week_start"
+        st.caption(
+            "See how your spending is moving from Sunday to Saturday."
         )
 
 
-        week_end = weekly.get(
-            "week_end"
-        )
+        weekly = get_weekly_analytics()
 
 
-        if week_start and week_end:
+        if weekly is None:
 
-            try:
+            st.warning(
+                "Weekly analytics are currently unavailable."
+            )
 
-                start_date = pd.to_datetime(
-                    week_start
-                ).strftime(
-                    "%d %b %Y"
+        else:
+
+            weekly_total = float(
+                weekly.get(
+                    "total_spending",
+                    0
                 )
+            )
 
 
-                end_date = pd.to_datetime(
-                    week_end
-                ).strftime(
-                    "%d %b %Y"
+            weekly_count = int(
+                weekly.get(
+                    "total_expenses",
+                    0
                 )
+            )
 
 
-                st.caption(
-                    "Monday, "
-                    + start_date
-                    + " to Sunday, "
-                    + end_date
+            weekly_average = float(
+                weekly.get(
+                    "average_expense",
+                    0
                 )
+            )
 
 
-            except Exception:
-
-                pass
-
-
-        # ----------------------------------------------------
-        # WEEKLY METRICS
-        # ----------------------------------------------------
-
-        weekly_metric1, weekly_metric2, weekly_metric3 = (
-            st.columns(
+            week_col1, week_col2, week_col3 = st.columns(
                 3,
                 gap="medium"
             )
-        )
 
 
-        with weekly_metric1:
+            with week_col1:
 
-            st.metric(
-                "Weekly Spending",
-                "Rs. {:,.2f}".format(
-                    weekly.get(
-                        "total_spending",
-                        0
-                    )
-                )
-            )
-
-
-        with weekly_metric2:
-
-            st.metric(
-                "Transactions",
-                str(
-                    weekly.get(
-                        "total_expenses",
-                        0
-                    )
-                )
-            )
-
-
-        with weekly_metric3:
-
-            st.metric(
-                "Average Expense",
-                "Rs. {:,.2f}".format(
-                    weekly.get(
-                        "average_expense",
-                        0
-                    )
-                )
-            )
-
-
-        st.divider()
-
-
-        # ----------------------------------------------------
-        # WEEKLY CHARTS
-        # ----------------------------------------------------
-
-        weekly_chart_col1, weekly_chart_col2 = (
-            st.columns(
-                2,
-                gap="medium"
-            )
-        )
-
-
-        with weekly_chart_col1:
-
-            st.markdown(
-                '<div class="section-label">'
-                'Weekly Category Breakdown'
-                '</div>',
-                unsafe_allow_html=True
-            )
-
-
-            weekly_categories = weekly.get(
-                "categories",
-                {}
-            )
-
-
-            if weekly_categories:
-
-                weekly_category_series = pd.Series(
-                    weekly_categories,
-                    dtype="float64"
-                ).sort_values(
-                    ascending=False
-                )
-
-
-                st.bar_chart(
-                    weekly_category_series,
-                    horizontal=True,
-                    use_container_width=True,
-                    height=max(
-                        220,
-                        len(
-                            weekly_category_series
-                        ) * 55
+                st.metric(
+                    "Spent This Week",
+                    money(
+                        weekly_total
                     )
                 )
 
 
-            else:
+            with week_col2:
 
-                st.info(
-                    "No spending recorded this week."
+                st.metric(
+                    "Transactions",
+                    str(
+                        weekly_count
+                    )
                 )
 
 
-        with weekly_chart_col2:
+            with week_col3:
 
-            st.markdown(
-                '<div class="section-label">'
-                'Daily Spending'
-                '</div>',
-                unsafe_allow_html=True
-            )
+                st.metric(
+                    "Average",
+                    money(
+                        weekly_average
+                    )
+                )
 
 
             weekly_daily = pd.DataFrame(
@@ -3098,214 +4198,451 @@ elif page == "Analytics":
 
             if not weekly_daily.empty:
 
-                weekly_daily["date"] = (
-                    pd.to_datetime(
-                        weekly_daily[
-                            "date"
-                        ],
-                        errors="coerce"
-                    )
+                weekly_daily["date"] = pd.to_datetime(
+                    weekly_daily["date"],
+                    errors="coerce"
                 )
 
 
-                weekly_daily = (
-                    weekly_daily
-                    .set_index(
-                        "date"
-                    )
+                weekly_daily["amount"] = pd.to_numeric(
+                    weekly_daily["amount"],
+                    errors="coerce"
+                ).fillna(0)
+
+
+                weekly_daily["Day"] = (
+                    weekly_daily["date"]
+                    .dt.strftime("%a")
+                )
+
+                day_order = [
+                    "Sun",
+                    "Mon",
+                    "Tue",
+                    "Wed",
+                    "Thu",
+                    "Fri",
+                    "Sat"
+                ]
+
+                weekly_daily["Day"] = pd.Categorical(
+                    weekly_daily["Day"],
+                    categories=day_order,
+                    ordered=True
+                )
+
+                weekly_daily = weekly_daily.sort_values(
+                    "Day"
                 )
 
 
-                st.line_chart(
+
+
+                daily_chart = (
                     weekly_daily[
-                        "amount"
-                    ],
-                    use_container_width=True,
-                    height=320
-                )
-
-
-            else:
-
-                st.info(
-                    "No daily spending data available."
-                )
-
-
-        # ----------------------------------------------------
-        # WEEKLY HIGHEST EXPENSE
-        # ----------------------------------------------------
-
-        weekly_highest = weekly.get(
-            "highest_expense"
-        )
-
-
-        if weekly_highest:
-
-            st.markdown(
-                '<div class="section-label">'
-                'Highest Expense This Week'
-                '</div>',
-                unsafe_allow_html=True
-            )
-
-
-            highest_col1, highest_col2, highest_col3 = (
-                st.columns(
-                    [2, 1, 1]
-                )
-            )
-
-
-            with highest_col1:
-
-                st.metric(
-                    "Description",
-                    weekly_highest[
-                        "description"
-                    ]
-                )
-
-
-            with highest_col2:
-
-                st.metric(
-                    "Amount",
-                    "Rs. {:,.2f}".format(
-                        weekly_highest[
+                        [
+                            "Day",
                             "amount"
                         ]
+                    ]
+                    .set_index("Day")
+                )
+
+
+                st.bar_chart(
+                    daily_chart,
+                    use_container_width=True,
+                    height=280
+                )
+
+
+                st.caption(
+                    "Each bar shows how much you spent on that day."
+                )
+
+
+            weekly_categories = weekly.get(
+                "categories",
+                {}
+            )
+
+
+            if weekly_categories:
+
+                weekly_category_series = (
+                    pd.Series(
+                        weekly_categories,
+                        dtype="float64"
+                    )
+                    .sort_values(
+                        ascending=True
                     )
                 )
 
 
-            with highest_col3:
-
-                st.metric(
-                    "Category",
-                    weekly_highest[
-                        "category"
-                    ]
+                st.markdown(
+                    '<div class="section-label">'
+                    'This Week by Category'
+                    '</div>',
+                    unsafe_allow_html=True
                 )
 
 
-        # ----------------------------------------------------
-        # WEEKLY INSIGHTS
-        # ----------------------------------------------------
-
-        weekly_insights = weekly.get(
-            "insights",
-            []
-        )
-
-
-        if weekly_insights:
-
-            st.markdown(
-                '<div class="section-label">'
-                'Weekly Insights'
-                '</div>',
-                unsafe_allow_html=True
-            )
-
-
-            for insight in weekly_insights:
-
-                st.info(
-                    insight
+                st.bar_chart(
+                    weekly_category_series,
+                    horizontal=True,
+                    use_container_width=True,
+                    height=240
                 )
 
 
-    st.divider()
-
-
-    # ========================================================
-    # MONTHLY ANALYTICS
-    # ========================================================
-
-    if monthly is None:
-
-        st.error(
-            "Unable to retrieve monthly analytics."
-        )
-
-
-    else:
-
-        st.subheader(
-            datetime(
-                int(selected_year),
-                int(selected_month),
-                1
-            ).strftime(
-                "%B %Y"
-            )
-        )
-
-
-        # ----------------------------------------------------
-        # MONTHLY METRICS
-        # ----------------------------------------------------
-
-        metric1, metric2, metric3 = st.columns(
-            3,
-            gap="medium"
-        )
-
-
-        with metric1:
-
-            st.metric(
-                "Monthly Spending",
-                "Rs. {:,.2f}".format(
-                    monthly[
-                        "total_spending"
-                    ]
+                top_week_category = (
+                    weekly_category_series.idxmax()
                 )
-            )
 
 
-        with metric2:
-
-            st.metric(
-                "Transactions",
-                str(
-                    monthly[
-                        "total_expenses"
-                    ]
+                st.caption(
+                    "Most spent on "
+                    + str(
+                        top_week_category
+                    )
+                    + " this week."
                 )
-            )
-
-
-        with metric3:
-
-            st.metric(
-                "Average Expense",
-                "Rs. {:,.2f}".format(
-                    monthly[
-                        "average_expense"
-                    ]
-                )
-            )
 
 
         st.divider()
 
 
-        # ----------------------------------------------------
-        # MONTHLY TREND
-        # ----------------------------------------------------
+        # ====================================================
+        # THIS MONTH
+        # ====================================================
 
-        if trend is not None:
+        st.markdown(
+            '<div class="section-label">'
+            'This Month'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
-            st.markdown(
-                '<div class="section-label">'
-                'Monthly Spending Trend'
-                '</div>',
-                unsafe_allow_html=True
+        st.caption(
+            "Understand where this month's money is going."
+        )
+
+
+        monthly = get_monthly_analytics(
+            int(now.year),
+            int(now.month)
+        )
+
+
+        comparison = get_monthly_comparison(
+            int(now.year),
+            int(now.month)
+        )
+
+
+        if monthly is None:
+
+            st.warning(
+                "Monthly analytics are currently unavailable."
             )
 
+        else:
+
+            month_total = float(
+                monthly.get(
+                    "total_spending",
+                    0
+                )
+            )
+
+
+            month_count = int(
+                monthly.get(
+                    "total_expenses",
+                    0
+                )
+            )
+
+
+            month_average = float(
+                monthly.get(
+                    "average_expense",
+                    0
+                )
+            )
+
+
+            month_col1, month_col2, month_col3 = st.columns(
+                3,
+                gap="medium"
+            )
+
+
+            with month_col1:
+
+                st.metric(
+                    "Spent This Month",
+                    money(
+                        month_total
+                    )
+                )
+
+
+            with month_col2:
+
+                st.metric(
+                    "Transactions",
+                    str(
+                        month_count
+                    )
+                )
+
+
+            with month_col3:
+
+                st.metric(
+                    "Average",
+                    money(
+                        month_average
+                    )
+                )
+
+
+            month_categories = monthly.get(
+                "categories",
+                {}
+            )
+
+
+            if month_categories:
+
+                st.markdown(
+                    '<div class="section-label">'
+                    'Where Your Money Goes'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+
+
+                st.caption(
+                    "A simple breakdown of this month's spending."
+                )
+
+
+                month_category_series = (
+                    pd.Series(
+                        month_categories,
+                        dtype="float64"
+                    )
+                    .sort_values(
+                        ascending=True
+                    )
+                )
+
+
+                st.bar_chart(
+                    month_category_series,
+                    horizontal=True,
+                    use_container_width=True,
+                    height=270
+                )
+
+
+                top_month_category = (
+                    month_category_series.idxmax()
+                )
+
+
+                top_month_amount = float(
+                    month_category_series.max()
+                )
+
+
+                top_month_share = (
+                    top_month_amount
+                    / month_total
+                    * 100
+                    if month_total > 0
+                    else 0
+                )
+
+
+                st.caption(
+                    str(
+                        top_month_category
+                    )
+                    + " is your biggest category at "
+                    + money(
+                        top_month_amount
+                    )
+                    + " ("
+                    + "{:.1f}%".format(
+                        top_month_share
+                    )
+                    + " of this month's spending)."
+                )
+
+
+            if comparison is not None:
+
+                previous_total = float(
+                    comparison.get(
+                        "previous_month",
+                        {}
+                    ).get(
+                        "total_spending",
+                        0
+                    )
+                )
+
+
+                if previous_total > 0:
+
+                    difference = (
+                        month_total
+                        - previous_total
+                    )
+
+
+                    change = (
+                        difference
+                        / previous_total
+                        * 100
+                    )
+
+
+                    if difference > 0:
+
+                        st.info(
+                            "You spent "
+                            + money(
+                                abs(
+                                    difference
+                                )
+                            )
+                            + " more than last month "
+                            + "({:+.1f}%).".format(
+                                change
+                            )
+                        )
+
+                    elif difference < 0:
+
+                        st.success(
+                            "You spent "
+                            + money(
+                                abs(
+                                    difference
+                                )
+                            )
+                            + " less than last month "
+                            + "({:+.1f}%).".format(
+                                change
+                            )
+                        )
+
+                    else:
+
+                        st.info(
+                            "Your spending is the same as last month."
+                        )
+
+
+            month_highest = monthly.get(
+                "highest_expense"
+            )
+
+
+            if month_highest:
+
+                st.markdown(
+                    '<div class="section-label">'
+                    'Biggest Expense'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+
+
+                highest_col1, highest_col2 = st.columns(
+                    [2, 1],
+                    gap="medium"
+                )
+
+
+                with highest_col1:
+
+                    st.metric(
+                        "Expense",
+                        str(
+                            month_highest.get(
+                                "description",
+                                "-"
+                            )
+                        )
+                    )
+
+
+                    st.caption(
+                        "Your largest single expense this month."
+                    )
+
+
+                with highest_col2:
+
+                    st.metric(
+                        "Amount",
+                        money(
+                            month_highest.get(
+                                "amount",
+                                0
+                            )
+                        )
+                    )
+
+
+                    st.caption(
+                        "Category: "
+                        + str(
+                            month_highest.get(
+                                "category",
+                                "-"
+                            )
+                        )
+                    )
+
+
+        st.divider()
+
+
+        # ====================================================
+        # LAST 6 MONTHS
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-label">'
+            'Last 6 Months'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        st.caption(
+            "See whether your overall spending is rising or falling."
+        )
+
+
+        trend = get_monthly_trend(
+            6
+        )
+
+
+        if trend is None:
+
+            st.warning(
+                "Six-month trend is currently unavailable."
+            )
+
+        else:
 
             trend_data = pd.DataFrame(
                 trend.get(
@@ -3315,217 +4652,646 @@ elif page == "Analytics":
             )
 
 
-            if not trend_data.empty:
+            if trend_data.empty:
+
+                st.info(
+                    "Not enough data for a six-month trend."
+                )
+
+            else:
+
+                trend_data["total_spending"] = pd.to_numeric(
+                    trend_data["total_spending"],
+                    errors="coerce"
+                ).fillna(0)
+
 
                 trend_data["label"] = (
-                    trend_data[
-                        "label"
-                    ].astype(str)
+                    trend_data["label"]
+                    .astype(str)
                 )
 
 
-                trend_data = (
+                trend_values = (
                     trend_data
-                    .set_index(
-                        "label"
-                    )
+                    .set_index("label")[
+                        "total_spending"
+                    ]
                 )
 
 
                 st.line_chart(
-                    trend_data[
-                        "total_spending"
-                    ],
+                    trend_values,
                     use_container_width=True,
-                    height=320
+                    height=300
                 )
 
 
-            else:
+                highest_month = trend_data.loc[
+                    trend_data["total_spending"].idxmax()
+                ]
 
-                st.info(
-                    "No trend data available."
+
+                lowest_month = trend_data.loc[
+                    trend_data["total_spending"].idxmin()
+                ]
+
+
+                trend_total = float(
+                    trend_data["total_spending"].sum()
                 )
+
+
+                trend_average = (
+                    trend_total
+                    / len(trend_data)
+                )
+
+
+                six_col1, six_col2, six_col3 = st.columns(
+                    3,
+                    gap="medium"
+                )
+
+
+                with six_col1:
+
+                    st.metric(
+                        "Average Monthly",
+                        money(
+                            trend_average
+                        )
+                    )
+
+
+                with six_col2:
+
+                    st.metric(
+                        "Highest Month",
+                        str(
+                            highest_month["label"]
+                        )
+                    )
+
+
+                    st.caption(
+                        money(
+                            highest_month[
+                                "total_spending"
+                            ]
+                        )
+                    )
+
+
+                with six_col3:
+
+                    st.metric(
+                        "Lowest Month",
+                        str(
+                            lowest_month["label"]
+                        )
+                    )
+
+
+                    st.caption(
+                        money(
+                            lowest_month[
+                                "total_spending"
+                            ]
+                        )
+                    )
 
 
         st.divider()
 
 
-        # ----------------------------------------------------
-        # MONTH-TO-MONTH COMPARISON
-        # ----------------------------------------------------
+        # ====================================================
+        # THIS YEAR
+        # ====================================================
 
-        if comparison is not None:
+        st.markdown(
+            '<div class="section-label">'
+            'This Year'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
-            current = comparison[
-                "current_month"
+        st.caption(
+            "Your complete spending picture for "
+            + str(
+                now.year
+            )
+            + "."
+        )
+
+
+        year_data = expenses[
+            expenses["created_at"] >= year_start
+        ].copy()
+
+
+        year_total = float(
+            year_data["amount"].sum()
+        )
+
+
+        year_count = len(
+            year_data
+        )
+
+
+        year_average = (
+            year_total
+            / year_count
+            if year_count > 0
+            else 0
+        )
+
+
+        year_col1, year_col2, year_col3 = st.columns(
+            3,
+            gap="medium"
+        )
+
+
+        with year_col1:
+
+            st.metric(
+                "Yearly Spending",
+                money(
+                    year_total
+                )
+            )
+
+
+        with year_col2:
+
+            st.metric(
+                "Transactions",
+                str(
+                    year_count
+                )
+            )
+
+
+        with year_col3:
+
+            st.metric(
+                "Average Transaction",
+                money(
+                    year_average
+                )
+            )
+
+
+        if year_data.empty:
+
+            st.info(
+                "No expenses recorded this year."
+            )
+
+        else:
+
+            # ------------------------------------------------
+            # MONTHLY YEAR VIEW
+            # ------------------------------------------------
+
+            yearly_monthly = (
+                year_data
+                .assign(
+                    Month=year_data[
+                        "created_at"
+                    ].dt.strftime(
+                        "%b"
+                    )
+                )
+                .groupby("Month")["amount"]
+                .sum()
+            )
+
+
+            month_order = [
+                "Jan",
+                "Feb",
+                "Mar",
+                "Apr",
+                "May",
+                "Jun",
+                "Jul",
+                "Aug",
+                "Sep",
+                "Oct",
+                "Nov",
+                "Dec"
             ]
 
 
-            previous = comparison[
-                "previous_month"
-            ]
-
-
-            change = comparison[
-                "change_percent"
-            ]
+            yearly_monthly = (
+                yearly_monthly
+                .reindex(
+                    month_order,
+                    fill_value=0
+                )
+            )
 
 
             st.markdown(
                 '<div class="section-label">'
-                'Month-to-Month Comparison'
+                'Monthly Spending'
                 '</div>',
                 unsafe_allow_html=True
             )
 
 
-            compare_col1, compare_col2, compare_col3 = (
-                st.columns(
-                    3
+            st.caption(
+                "See how much you spent each month this year."
+            )
+
+
+            st.bar_chart(
+                yearly_monthly,
+                use_container_width=True,
+                height=300
+            )
+
+
+            # ------------------------------------------------
+            # YEARLY CATEGORIES
+            # ------------------------------------------------
+
+            yearly_categories = (
+                year_data
+                .groupby("category")["amount"]
+                .sum()
+                .sort_values(
+                    ascending=True
                 )
             )
 
 
-            with compare_col1:
+            if not yearly_categories.empty:
 
-                st.metric(
-                    "Current Month",
-                    "Rs. {:,.2f}".format(
-                        current[
-                            "total_spending"
-                        ]
-                    )
+                st.markdown(
+                    '<div class="section-label">'
+                    'Yearly Spending by Category'
+                    '</div>',
+                    unsafe_allow_html=True
                 )
 
 
-            with compare_col2:
-
-                st.metric(
-                    "Previous Month",
-                    "Rs. {:,.2f}".format(
-                        previous[
-                            "total_spending"
-                        ]
-                    )
-                )
-
-
-            with compare_col3:
-
-                st.metric(
-                    "Change",
-                    "{:+.2f}%".format(
-                        change
-                    )
-                )
-
-
-            # ------------------------------------------------
-            # CATEGORY COMPARISON
-            # ------------------------------------------------
-
-            category_rows = []
-
-
-            for category, values in comparison[
-                "category_comparison"
-            ].items():
-
-                category_rows.append(
-                    {
-                        "Category": category,
-                        "Current (Rs.)": values[
-                            "current"
-                        ],
-                        "Previous (Rs.)": values[
-                            "previous"
-                        ],
-                        "Change (%)": values[
-                            "change_percent"
-                        ]
-                    }
-                )
-
-
-            if category_rows:
-
-                st.dataframe(
-                    pd.DataFrame(
-                        category_rows
-                    ),
+                st.bar_chart(
+                    yearly_categories,
+                    horizontal=True,
                     use_container_width=True,
-                    hide_index=True
+                    height=260
                 )
+
+
+            # ------------------------------------------------
+            # HIGHEST SPENDING MONTH
+            # ------------------------------------------------
+
+            highest_year_month = (
+                yearly_monthly.idxmax()
+            )
+
+
+            highest_year_month_amount = float(
+                yearly_monthly.max()
+            )
+
+
+            st.caption(
+                "Highest spending month: "
+                + highest_year_month
+                + " · "
+                + money(
+                    highest_year_month_amount
+                )
+            )
 
 
         st.divider()
 
 
-        # ----------------------------------------------------
-        # HIGHEST EXPENSE
-        # ----------------------------------------------------
+        # ====================================================
+        # SPENDING PATTERNS
+        # ====================================================
 
         st.markdown(
             '<div class="section-label">'
-            'Highest Expense'
+            'Spending Patterns'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+        st.caption(
+            "Simple patterns found in your expense history."
+        )
+
+
+        if expenses.empty:
+
+            st.info(
+                "Add more expenses to see your spending patterns."
+            )
+
+        else:
+
+            valid_expenses = expenses.dropna(
+                subset=[
+                    "created_at",
+                    "amount"
+                ]
+            ).copy()
+
+
+            if valid_expenses.empty:
+
+                st.info(
+                    "Not enough valid expense data yet."
+                )
+
+            else:
+
+                # --------------------------------------------
+                # MOST ACTIVE CATEGORY
+                # --------------------------------------------
+
+                category_frequency = (
+                    valid_expenses[
+                        "category"
+                    ]
+                    .value_counts()
+                )
+
+
+                most_frequent_category = (
+                    category_frequency.index[0]
+                )
+
+
+                most_frequent_count = int(
+                    category_frequency.iloc[0]
+                )
+
+
+                # --------------------------------------------
+                # HIGHEST SPENDING DAY
+                # --------------------------------------------
+
+                daily_totals = (
+                    valid_expenses
+                    .assign(
+                        date_only=valid_expenses[
+                            "created_at"
+                        ].dt.date
+                    )
+                    .groupby(
+                        "date_only"
+                    )["amount"]
+                    .sum()
+                )
+
+
+                highest_day = (
+                    daily_totals.idxmax()
+                )
+
+
+                highest_day_amount = float(
+                    daily_totals.max()
+                )
+
+
+                # --------------------------------------------
+                # AVERAGE TRANSACTION
+                # --------------------------------------------
+
+                overall_average = float(
+                    valid_expenses["amount"].mean()
+                )
+
+
+                # --------------------------------------------
+                # SPENDING DAYS
+                # --------------------------------------------
+
+                spending_days = int(
+                    daily_totals.shape[0]
+                )
+
+
+                pattern_col1, pattern_col2 = st.columns(
+                    2,
+                    gap="medium"
+                )
+
+
+                with pattern_col1:
+
+                    st.metric(
+                        "Most Frequent Category",
+                        str(
+                            most_frequent_category
+                        )
+                    )
+
+
+                    st.caption(
+                        str(
+                            most_frequent_count
+                        )
+                        + " transaction"
+                        + (
+                            "s"
+                            if most_frequent_count != 1
+                            else ""
+                        )
+                    )
+
+
+                with pattern_col2:
+
+                    st.metric(
+                        "Highest Spending Day",
+                        highest_day.strftime(
+                            "%d %b %Y"
+                        )
+                    )
+
+
+                    st.caption(
+                        money(
+                            highest_day_amount
+                        )
+                        + " spent that day."
+                    )
+
+
+                pattern_col3, pattern_col4 = st.columns(
+                    2,
+                    gap="medium"
+                )
+
+
+                with pattern_col3:
+
+                    st.metric(
+                        "Average Transaction",
+                        money(
+                            overall_average
+                        )
+                    )
+
+
+                with pattern_col4:
+
+                    st.metric(
+                        "Spending Days",
+                        str(
+                            spending_days
+                        )
+                    )
+
+
+        st.divider()
+
+
+        # ====================================================
+        # WHAT STANDS OUT
+        # ====================================================
+
+        st.markdown(
+            '<div class="section-label">'
+            'What Stands Out'
             '</div>',
             unsafe_allow_html=True
         )
 
 
-        highest = monthly.get(
-            "highest_expense"
-        )
+        observations = []
 
 
-        if highest:
+        # ----------------------------------------------------
+        # TODAY
+        # ----------------------------------------------------
 
-            highest_col1, highest_col2, highest_col3 = (
-                st.columns(
-                    [2, 1, 1]
+        if today_count > 0:
+
+            observations.append(
+                "You made "
+                + str(
+                    today_count
+                )
+                + " transaction"
+                + (
+                    "s"
+                    if today_count != 1
+                    else ""
+                )
+                + " today, totaling "
+                + money(
+                    today_total
+                )
+                + "."
+            )
+
+
+        # ----------------------------------------------------
+        # MONTH CATEGORY
+        # ----------------------------------------------------
+
+        if (
+            monthly is not None
+            and month_categories
+        ):
+
+            observations.append(
+                str(
+                    top_month_category
+                )
+                + " is your biggest category this month."
+            )
+
+
+        # ----------------------------------------------------
+        # MONTH COMPARISON
+        # ----------------------------------------------------
+
+        if comparison is not None:
+
+            current_month_total = float(
+                comparison.get(
+                    "current_month",
+                    {}
+                ).get(
+                    "total_spending",
+                    0
                 )
             )
 
 
-            with highest_col1:
-
-                st.metric(
-                    "Description",
-                    highest[
-                        "description"
-                    ]
+            previous_month_total = float(
+                comparison.get(
+                    "previous_month",
+                    {}
+                ).get(
+                    "total_spending",
+                    0
                 )
+            )
 
 
-            with highest_col2:
+            if previous_month_total > 0:
 
-                st.metric(
-                    "Amount",
-                    "Rs. {:,.2f}".format(
-                        highest[
-                            "amount"
-                        ]
+                if current_month_total > previous_month_total:
+
+                    observations.append(
+                        "You are spending more this month than last month."
                     )
+
+                elif current_month_total < previous_month_total:
+
+                    observations.append(
+                        "You are spending less this month than last month."
+                    )
+
+                else:
+
+                    observations.append(
+                        "Your spending is similar to last month."
+                    )
+
+
+        # ----------------------------------------------------
+        # YEAR
+        # ----------------------------------------------------
+
+        if year_count > 0:
+
+            observations.append(
+                "You have spent "
+                + money(
+                    year_total
                 )
+                + " so far this year."
+            )
 
 
-            with highest_col3:
+        if observations:
 
-                st.metric(
-                    "Category",
-                    highest[
-                        "category"
-                    ]
+            for observation in observations[:3]:
+
+                st.info(
+                    observation
                 )
-
 
         else:
 
             st.info(
-                "No expenses recorded for this month."
+                "Keep adding expenses to see useful spending patterns."
             )
-
 
 # ============================================================
 # FOOTER

@@ -6,7 +6,13 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Main Streamlit application
 COPY app.py .
+
+# Streamlit theme and configuration
+COPY .streamlit .streamlit
+
+# Application assets
 
 EXPOSE 8501
 

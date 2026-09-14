@@ -1,4 +1,5 @@
 description,category
+eat,Food
 lunch at restaurant,Food
 dinner at cafe,Food
 pizza,Food
@@ -27,6 +28,7 @@ public bus,Transport
 transport fare,Transport
 motorbike fuel,Transport
 cab to home,Transport
+travel,Transport
 bus to college,Transport
 travel fare,Transport
 car fuel,Transport
@@ -176,6 +178,8 @@ travel by taxi,Transport
 shared taxi,Transport
 ride sharing fare,Transport
 book for programming,Education
+learn,Education
+learning,Education
 programming textbook,Education
 python textbook,Education
 java programming book,Education
@@ -242,6 +246,8 @@ music concert,Entertainment
 gaming pass,Entertainment
 game subscription,Entertainment
 playstation game,Entertainment
+play,Entertainment
+games,Entertainment
 xbox game,Entertainment
 computer game,Entertainment
 mobile game purchase,Entertainment
@@ -758,6 +764,8 @@ futsal court booking,Entertainment
 futsal game with friends,Entertainment
 futsal tournament ticket,Entertainment
 new shirt purchase,Shopping
+futsal cleats,Shopping
+Bought,Shopping
 shirt purchase,Shopping
 new jeans purchase,Shopping
 jeans purchase,Shopping

@@ -1,9 +1,40 @@
+# Python
 .venv/
+venv/
 __pycache__/
-*.pyc
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# Git
 .git/
 .gitignore
+
+# IDE
 .vscode/
 .idea/
-expenses.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Database
+backend/data/expenses.db
+
+# ML training data
+ml/data/
+
+# Streamlit cache
+**/.streamlit/cache/
+.streamlit/cache/
+
+# Local Streamlit state/cache
+**/.cache/
+
+# Documentation
 README.md

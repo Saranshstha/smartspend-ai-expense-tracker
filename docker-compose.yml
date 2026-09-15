@@ -3,7 +3,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: backend/Dockerfile.backend
 
     container_name: smartspend-backend
 
@@ -11,15 +11,15 @@ services:
       - "8000:8000"
 
     volumes:
-      - smartspend_data:/app/data
-
+      - ./backend/data:/app/data
+      
     restart: unless-stopped
 
 
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: frontend/Dockerfile.frontend
 
     container_name: smartspend-frontend
 
@@ -33,7 +33,3 @@ services:
       - backend
 
     restart: unless-stopped
-
-
-volumes:
-  smartspend_data:

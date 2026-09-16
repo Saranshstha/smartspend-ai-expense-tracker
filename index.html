@@ -1,0 +1,4735 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SmartSpend: AI expense categorization and spending analytics</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+    <style>
+        /* ============================================================
+   ROOT
+   ============================================================ */
+
+        :root {
+            --paper: #151515;
+            --paper-raised: #1B1B1B;
+            --sidebar: #101010;
+            --input-bg: #181818;
+            --active-nav: #2D2D2D;
+
+            --ink: #F2F2F0;
+            --ink-soft: #9F9F9C;
+            --ink-faint: #696965;
+
+            --rule: #303030;
+
+            --brand: #5C8DFF;
+            --brand-bright: #83A8FF;
+            --brand-ink: #0B0F1A;
+
+            --cat-food: #E2914F;
+            --cat-transport: #6C9DE8;
+            --cat-education: #B48AF0;
+            --cat-shopping: #EC80A2;
+            --cat-entertainment: #4FC9B8;
+
+            --status-good: #5DAE7A;
+            --status-watch: #D9A441;
+            --status-near: #CF8B3F;
+            --status-over: #CF564A;
+
+            --shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+
+            --font-main: "Inter", sans-serif;
+        }
+
+        :root[data-theme="light"] {
+            --paper: #F4F3EC;
+            --paper-raised: #FBFAF4;
+            --sidebar: #EDECE3;
+            --input-bg: #FFFFFF;
+            --active-nav: #E4E2D5;
+
+            --ink: #17180F;
+            --ink-soft: #54544A;
+            --ink-faint: #8B8A7C;
+
+            --rule: #D8D6C6;
+
+            --brand: #3D6BDE;
+            --brand-bright: #5C8DFF;
+            --brand-ink: #FBFAF4;
+
+            --shadow: 0 1px 0 rgba(23, 24, 15, 0.08);
+        }
+
+
+        /* ============================================================
+   GLOBAL
+   ============================================================ */
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--font-main);
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        img {
+            max-width: 100%;
+            display: block;
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .wrap {
+            width: 100%;
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        @media (max-width:640px) {
+            .wrap {
+                padding: 0 20px;
+            }
+        }
+
+
+        /* ============================================================
+   TOP NAVIGATION
+   ============================================================ */
+
+        nav.top {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+
+            background: color-mix(in srgb,
+                    var(--paper) 88%,
+                    transparent);
+
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+
+            border-bottom: 1px solid transparent;
+
+            transition:
+                border-color .25s ease,
+                box-shadow .25s ease;
+        }
+
+        nav.top.scrolled {
+            border-bottom-color: var(--rule);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        }
+
+        nav.top .wrap {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+
+        .wordmark {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            font-family: var(--font-main);
+            font-weight: 700;
+            font-size: 14px;
+
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+
+            white-space: nowrap;
+        }
+
+        .wordmark .dot {
+            width: 8px;
+            height: 8px;
+
+            border-radius: 50%;
+
+            background: var(--brand);
+
+            display: inline-block;
+        }
+
+
+        /* ============================================================
+   DESKTOP NAVIGATION
+   ============================================================ */
+
+        .main-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 28px;
+        }
+
+        .main-nav a {
+            position: relative;
+
+            text-decoration: none;
+
+            font-family: var(--font-main);
+
+            font-size: 13px;
+            font-weight: 500;
+
+            color: var(--ink-soft);
+
+            padding: 7px 0;
+
+            transition:
+                color .2s ease,
+                opacity .2s ease;
+        }
+
+        .main-nav a::after {
+            content: "";
+
+            position: absolute;
+
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+            height: 2px;
+
+            border-radius: 2px;
+
+            background: var(--brand);
+
+            transform: scaleX(0);
+
+            transform-origin: center;
+
+            transition:
+                transform .22s ease;
+        }
+
+        .main-nav a:hover {
+            color: var(--ink);
+        }
+
+        .main-nav a.active {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        .main-nav a.active::after {
+            transform: scaleX(1);
+        }
+
+
+        /* ============================================================
+   AUTH
+   ============================================================ */
+
+        .auth-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+
+        /* ============================================================
+   BUTTONS
+   ============================================================ */
+
+        .btn {
+            font-family: var(--font-main);
+
+            font-size: 13px;
+            font-weight: 600;
+
+            padding: 10px 18px;
+
+            border-radius: 6px;
+
+            border: 1px solid var(--rule);
+
+            text-decoration: none;
+
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            cursor: pointer;
+
+            background: transparent;
+            color: var(--ink);
+
+            transition:
+                transform .15s ease,
+                background .15s ease,
+                color .15s ease,
+                border-color .15s ease;
+        }
+
+        .btn.primary {
+            background: var(--brand);
+            color: var(--brand-ink);
+            border-color: var(--brand);
+        }
+
+        .btn.ghost {
+            border-color: transparent;
+            color: var(--ink-soft);
+        }
+
+        .btn.ghost:hover {
+            color: var(--ink);
+            border-color: var(--rule);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn.primary:hover {
+            background: var(--brand-bright);
+            border-color: var(--brand-bright);
+        }
+
+        .btn:focus-visible,
+        a:focus-visible,
+        input:focus-visible {
+            outline: 2px solid var(--brand);
+            outline-offset: 2px;
+        }
+
+
+        /* ============================================================
+   MOBILE BOTTOM NAV
+   ============================================================ */
+
+        /*
+   Important:
+   On mobile the desktop .main-nav is completely removed from
+   the normal top-nav layout.
+
+   It is then positioned independently against the viewport.
+*/
+
+        @keyframes mobileNavEnter {
+
+            0% {
+                opacity: 0;
+                transform:
+                    translate(-50%, 24px) scale(0.96);
+            }
+
+            100% {
+                opacity: 1;
+                transform:
+                    translate(-50%, 0) scale(1);
+            }
+
+        }
+
+        @media screen and (max-width:760px) {
+
+            /*
+     The top navigation itself stays simple.
+     Removing backdrop-filter here prevents the fixed bottom
+     navigation from being trapped inside the sticky header.
+  */
+
+            nav.top {
+                position: sticky;
+                top: 0;
+
+                background: var(--paper);
+
+                backdrop-filter: none;
+                -webkit-backdrop-filter: none;
+            }
+
+            nav.top .wrap {
+                height: 60px;
+            }
+
+            /*
+     No login/signup on mobile.
+  */
+
+            .auth-actions {
+                display: none !important;
+            }
+
+            /*
+     Desktop navigation disappears completely from its original
+     top position.
+  */
+
+            nav.top .main-nav {
+                position: fixed !important;
+
+                display: flex !important;
+
+                left: 50% !important;
+                bottom: 14px !important;
+
+                top: auto !important;
+                right: auto !important;
+
+                width: max-content !important;
+                max-width: calc(100vw - 24px) !important;
+
+                height: auto !important;
+
+                margin: 0 !important;
+                padding: 5px !important;
+
+                flex-direction: row !important;
+                align-items: center !important;
+                justify-content: center !important;
+
+                gap: 3px !important;
+
+                background: rgba(27, 27, 27, 0.96) !important;
+
+                border: 1px solid var(--rule) !important;
+
+                border-radius: 999px !important;
+
+                box-shadow:
+                    0 14px 36px rgba(0, 0, 0, 0.42),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+                backdrop-filter: blur(18px) saturate(150%);
+                -webkit-backdrop-filter: blur(18px) saturate(150%);
+
+                z-index: 99999 !important;
+
+                /*
+       Force the bottom state.
+    */
+
+                transform:
+                    translate(-50%, 0) !important;
+
+                animation:
+                    mobileNavEnter .45s cubic-bezier(.22, .8, .25, 1) .15s both;
+            }
+
+            /*
+     Navigation links themselves.
+  */
+
+            nav.top .main-nav a {
+                position: relative;
+
+                display: flex !important;
+
+                align-items: center;
+                justify-content: center;
+
+                min-width: 82px;
+
+                padding: 11px 15px !important;
+
+                margin: 0 !important;
+
+                border-radius: 999px !important;
+
+                font-family: var(--font-main) !important;
+
+                font-size: 11px !important;
+
+                font-weight: 600 !important;
+
+                line-height: 1 !important;
+
+                white-space: nowrap !important;
+
+                text-decoration: none !important;
+
+                color: var(--ink-soft) !important;
+
+                transition:
+                    background .22s ease,
+                    color .22s ease,
+                    transform .22s ease;
+            }
+
+            /*
+     Remove the desktop underline.
+  */
+
+            nav.top .main-nav a::after {
+                display: none !important;
+            }
+
+            nav.top .main-nav a:hover {
+                background: rgba(255, 255, 255, 0.045) !important;
+
+                color: var(--ink) !important;
+            }
+
+            nav.top .main-nav a.active {
+                background: var(--active-nav) !important;
+
+                color: var(--ink) !important;
+
+                transform: translateY(-1px);
+            }
+
+            /*
+     Make space at the bottom so page content doesn't get covered.
+  */
+
+            body {
+                padding-bottom: 90px !important;
+            }
+
+            footer {
+                padding-bottom: 100px !important;
+            }
+
+        }
+
+
+        /* ============================================================
+   VERY SMALL PHONES
+   ============================================================ */
+
+        @media screen and (max-width:420px) {
+
+            nav.top .main-nav {
+                max-width: calc(100vw - 16px) !important;
+                bottom: 10px !important;
+                padding: 4px !important;
+            }
+
+            nav.top .main-nav a {
+                min-width: 0;
+
+                padding: 10px 13px !important;
+
+                font-size: 10.5px !important;
+            }
+
+            body {
+                padding-bottom: 82px !important;
+            }
+
+        }
+
+
+        /* ============================================================
+   HERO
+   ============================================================ */
+
+        header.hero {
+            padding: 88px 0 64px;
+        }
+
+        .hero-grid {
+            display: grid;
+
+            grid-template-columns: 1.1fr 0.9fr;
+
+            gap: 56px;
+
+            align-items: start;
+        }
+
+        @media (max-width:860px) {
+
+            .hero-grid {
+                grid-template-columns: 1fr;
+            }
+
+            header.hero {
+                padding: 52px 0 40px;
+            }
+
+        }
+
+        .eyebrow-line {
+            font-family: var(--font-main);
+
+            font-size: 12px;
+            font-weight: 600;
+
+            letter-spacing: 0.08em;
+
+            text-transform: uppercase;
+
+            color: var(--ink-faint);
+
+            display: flex;
+            align-items: center;
+
+            gap: 10px;
+
+            margin-bottom: 22px;
+        }
+
+        .eyebrow-line .rule {
+            flex: 0 0 28px;
+
+            height: 1px;
+
+            background: var(--rule);
+        }
+
+        h1 {
+            font-family: var(--font-main);
+
+            font-weight: 600;
+
+            font-size: clamp(38px, 5.4vw, 60px);
+
+            line-height: 1.05;
+
+            letter-spacing: -0.035em;
+
+            margin: 0 0 22px;
+        }
+
+        h1 em {
+            font-style: normal;
+
+            font-weight: 600;
+
+            color: var(--brand);
+        }
+
+        .hero-sub {
+            font-size: 18px;
+
+            line-height: 1.6;
+
+            color: var(--ink-soft);
+
+            max-width: 46ch;
+
+            margin: 0 0 30px;
+        }
+
+        .hero-cta {
+            display: flex;
+
+            gap: 14px;
+
+            flex-wrap: wrap;
+
+            margin-bottom: 10px;
+        }
+
+
+        /* ============================================================
+   RECEIPT
+   ============================================================ */
+
+        .receipt {
+            background: var(--paper-raised);
+
+            border: 1px solid var(--rule);
+
+            padding: 26px 26px 22px;
+
+            position: relative;
+
+            box-shadow: var(--shadow);
+
+            transition:
+                transform .25s ease,
+                box-shadow .25s ease;
+        }
+
+        .receipt:hover {
+            transform: translateY(-3px);
+
+            box-shadow:
+                0 16px 32px rgba(0, 0, 0, 0.35);
+        }
+
+        .receipt::before,
+        .receipt::after {
+            content: "";
+
+            position: absolute;
+
+            left: 0;
+            right: 0;
+
+            height: 9px;
+
+            background-image:
+                linear-gradient(135deg,
+                    var(--paper) 50%,
+                    transparent 50%),
+                linear-gradient(45deg,
+                    var(--paper) 50%,
+                    transparent 50%);
+
+            background-size: 14px 14px;
+
+            background-repeat: repeat-x;
+        }
+
+        .receipt::before {
+            top: -9px;
+
+            background-position: bottom;
+        }
+
+        .receipt::after {
+            bottom: -9px;
+
+            background-position: top;
+
+            transform: rotate(180deg);
+        }
+
+        .receipt-head {
+            font-family: var(--font-main);
+
+            font-size: 11px;
+            font-weight: 600;
+
+            letter-spacing: 0.05em;
+
+            color: var(--ink-faint);
+
+            display: flex;
+
+            justify-content: space-between;
+
+            border-bottom: 1px dashed var(--rule);
+
+            padding-bottom: 14px;
+
+            margin-bottom: 16px;
+        }
+
+        .receipt-label {
+            font-family: var(--font-main);
+
+            font-size: 11px;
+
+            font-weight: 600;
+
+            letter-spacing: 0.06em;
+
+            text-transform: uppercase;
+
+            color: var(--ink-faint);
+
+            margin-bottom: 8px;
+        }
+
+        #desc-input {
+            width: 100%;
+
+            font-family: var(--font-main);
+
+            font-size: 15px;
+
+            color: var(--ink);
+
+            background: var(--input-bg);
+
+            border: 1px solid var(--rule);
+
+            border-radius: 8px;
+
+            padding: 11px 14px;
+
+            margin-bottom: 18px;
+
+            transition: border-color .15s ease;
+        }
+
+        #desc-input:focus {
+            border-color: var(--brand);
+        }
+
+        #desc-input::placeholder {
+            color: var(--ink-faint);
+        }
+
+        .presets {
+            display: flex;
+
+            flex-wrap: wrap;
+
+            gap: 6px;
+
+            margin-bottom: 20px;
+        }
+
+        .preset-chip {
+            font-family: var(--font-main);
+
+            font-size: 11px;
+            font-weight: 500;
+
+            color: var(--ink-soft);
+
+            border: 1px solid var(--rule);
+
+            border-radius: 20px;
+
+            padding: 4px 10px;
+
+            background: transparent;
+
+            cursor: pointer;
+        }
+
+        .preset-chip:hover {
+            border-color: var(--ink-soft);
+
+            color: var(--ink);
+        }
+
+        .result-row {
+            display: flex;
+
+            align-items: baseline;
+
+            justify-content: space-between;
+
+            margin-bottom: 6px;
+
+            font-family: var(--font-main);
+
+            font-size: 13px;
+        }
+
+        .result-row .leader {
+            flex: 1;
+
+            border-bottom: 1px dotted var(--rule);
+
+            margin: 0 8px 4px;
+
+            height: 1px;
+        }
+
+        #cat-value {
+            font-weight: 700;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 6px;
+        }
+
+        #cat-value .swatch {
+            width: 9px;
+            height: 9px;
+
+            border-radius: 2px;
+
+            display: inline-block;
+        }
+
+        .confidence-track {
+            height: 8px;
+
+            background: var(--rule);
+
+            border-radius: 4px;
+
+            overflow: hidden;
+
+            margin: 10px 0 4px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+
+            width: 0%;
+
+            background: var(--brand);
+
+            border-radius: 4px;
+        }
+
+        #conf-value {
+            font-family: var(--font-main);
+
+            font-size: 12px;
+
+            color: var(--ink-faint);
+        }
+
+
+        /* ============================================================
+   SECTIONS
+   ============================================================ */
+
+        section {
+            padding: 64px 0;
+
+            border-top: 1px solid var(--rule);
+        }
+
+        .section-head {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: flex-end;
+
+            gap: 24px;
+
+            margin-bottom: 40px;
+
+            flex-wrap: wrap;
+        }
+
+        .section-head h2 {
+            font-family: var(--font-main);
+
+            font-weight: 600;
+
+            font-size: clamp(26px, 3.4vw, 36px);
+
+            margin: 0;
+
+            letter-spacing: -0.025em;
+
+            max-width: 20ch;
+        }
+
+        .section-head p {
+            font-size: 15.5px;
+
+            color: var(--ink-soft);
+
+            max-width: 38ch;
+
+            margin: 0;
+
+            line-height: 1.55;
+        }
+
+
+        /* ============================================================
+   FEATURE LEDGER
+   ============================================================ */
+
+        .ledger-row {
+            display: grid;
+
+            grid-template-columns: 170px 1fr;
+
+            gap: 24px;
+
+            padding: 22px 0;
+
+            border-top: 1px solid var(--rule);
+
+            align-items: start;
+
+            transition:
+                padding-left .25s ease,
+                border-color .25s ease;
+        }
+
+        .ledger-row:hover {
+            padding-left: 10px;
+
+            border-top-color: var(--ink-faint);
+        }
+
+        .ledger-row:hover .lr-num {
+            color: var(--brand);
+        }
+
+        .ledger-row:last-child {
+            border-bottom: 1px solid var(--rule);
+        }
+
+        @media (max-width:700px) {
+
+            .ledger-row {
+                grid-template-columns: 1fr;
+
+                gap: 6px;
+            }
+
+        }
+
+        .ledger-row .lr-title {
+            font-family: var(--font-main);
+
+            font-size: 13.5px;
+            font-weight: 600;
+
+            color: var(--ink);
+
+            display: flex;
+
+            align-items: baseline;
+
+            gap: 8px;
+        }
+
+        .ledger-row .lr-num {
+            color: var(--ink-faint);
+
+            font-weight: 500;
+
+            transition: color .2s ease;
+        }
+
+        .ledger-row .lr-body p {
+            margin: 0 0 10px;
+
+            color: var(--ink-soft);
+
+            font-size: 15px;
+
+            line-height: 1.6;
+
+            max-width: 58ch;
+        }
+
+        .lr-tags {
+            display: flex;
+
+            flex-wrap: wrap;
+
+            gap: 8px;
+
+            margin-top: 8px;
+        }
+
+        .lr-tag {
+            font-family: var(--font-main);
+
+            font-size: 11.5px;
+            font-weight: 500;
+
+            color: var(--ink-soft);
+
+            border: 1px solid var(--rule);
+
+            border-radius: 3px;
+
+            padding: 3px 8px;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            gap: 6px;
+        }
+
+        .lr-tag .swatch {
+            width: 7px;
+            height: 7px;
+
+            border-radius: 1.5px;
+
+            display: inline-block;
+        }
+
+
+        /* ============================================================
+   ESSENTIAL / REGULAR
+   ============================================================ */
+
+        .split-panel {
+            display: grid;
+
+            grid-template-columns: 1fr 1fr;
+
+            gap: 1px;
+
+            background: var(--rule);
+
+            border: 1px solid var(--rule);
+        }
+
+        @media (max-width:700px) {
+
+            .split-panel {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+        .split-cell {
+            background: var(--paper-raised);
+
+            padding: 28px;
+        }
+
+        .split-cell h3 {
+            font-family: var(--font-main);
+
+            font-size: 13px;
+            font-weight: 700;
+
+            margin: 0 0 12px;
+        }
+
+        .split-cell p {
+            font-size: 14.5px;
+
+            color: var(--ink-soft);
+
+            line-height: 1.6;
+
+            margin: 0 0 14px;
+
+            max-width: 40ch;
+        }
+
+        .split-cell ul {
+            margin: 0;
+
+            padding-left: 18px;
+
+            color: var(--ink-soft);
+
+            font-size: 14px;
+
+            line-height: 1.8;
+        }
+
+
+        /* ============================================================
+   BUDGET
+   ============================================================ */
+
+        .gauge-panel {
+            display: grid;
+
+            grid-template-columns: 1fr 1fr;
+
+            gap: 48px;
+
+            align-items: center;
+        }
+
+        @media (max-width:800px) {
+
+            .gauge-panel {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+        .gauge-card {
+            background: var(--paper-raised);
+
+            border: 1px solid var(--rule);
+
+            padding: 28px;
+
+            box-shadow: var(--shadow);
+
+            transition:
+                transform .25s ease,
+                box-shadow .25s ease;
+        }
+
+        .gauge-card:hover {
+            transform: translateY(-3px);
+
+            box-shadow:
+                0 16px 32px rgba(0, 0, 0, 0.35);
+        }
+
+        .status-badge {
+            font-family: var(--font-main);
+
+            font-size: 12.5px;
+            font-weight: 700;
+
+            padding: 6px 12px;
+
+            border-radius: 3px;
+
+            display: inline-block;
+
+            margin-bottom: 18px;
+
+            background: color-mix(in srgb,
+                    var(--status-good) 22%,
+                    transparent);
+
+            color: var(--status-good);
+        }
+
+        .gauge-track {
+            height: 14px;
+
+            background: var(--rule);
+
+            border-radius: 7px;
+
+            overflow: hidden;
+
+            margin-bottom: 6px;
+
+            position: relative;
+        }
+
+        .gauge-fill {
+            height: 100%;
+
+            width: 0%;
+
+            background: var(--status-good);
+        }
+
+        .gauge-scale {
+            display: flex;
+
+            justify-content: space-between;
+
+            font-family: var(--font-main);
+
+            font-size: 11px;
+
+            color: var(--ink-faint);
+
+            margin-bottom: 22px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+
+            accent-color: var(--brand);
+
+            margin-bottom: 26px;
+        }
+
+        .fig-rows .fig-row {
+            display: flex;
+
+            align-items: baseline;
+
+            font-family: var(--font-main);
+
+            font-size: 13.5px;
+
+            padding: 8px 0;
+
+            border-top: 1px dashed var(--rule);
+        }
+
+        .fig-rows .fig-row:first-child {
+            border-top: none;
+        }
+
+        .fig-row .fr-label {
+            color: var(--ink-soft);
+        }
+
+        .fig-row .leader {
+            flex: 1;
+
+            border-bottom: 1px dotted var(--rule);
+
+            margin: 0 8px 4px;
+
+            height: 1px;
+        }
+
+        .fig-row .fr-value {
+            font-weight: 600;
+        }
+
+        .fr-value.neg {
+            color: var(--status-over);
+        }
+
+        .gauge-copy p {
+            font-size: 15.5px;
+
+            line-height: 1.65;
+
+            color: var(--ink-soft);
+
+            max-width: 44ch;
+        }
+
+        .gauge-legend {
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 10px;
+
+            margin-top: 20px;
+
+            font-family: var(--font-main);
+
+            font-size: 12.5px;
+        }
+
+        .gauge-legend .leg-item {
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+
+            color: var(--ink-soft);
+        }
+
+        .leg-swatch {
+            width: 10px;
+            height: 10px;
+
+            border-radius: 2px;
+        }
+
+
+        /* ============================================================
+   DASHBOARD PREVIEW
+   ============================================================ */
+
+        .app-frame {
+            display: flex;
+
+            border: 1px solid var(--rule);
+
+            background: var(--paper);
+
+            overflow: hidden;
+        }
+
+        .app-rail {
+            width: 172px;
+
+            flex: 0 0 172px;
+
+            background: var(--sidebar);
+
+            border-right: 1px solid var(--rule);
+
+            padding: 20px 14px;
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 2px;
+        }
+
+        @media (max-width:700px) {
+
+            .app-rail {
+                display: none;
+            }
+
+        }
+
+        .rail-word {
+            font-family: var(--font-main);
+
+            font-weight: 700;
+
+            font-size: 12px;
+
+            letter-spacing: 0.08em;
+
+            text-transform: uppercase;
+
+            margin-bottom: 20px;
+
+            color: var(--ink);
+        }
+
+        .rail-group {
+            font-family: var(--font-main);
+
+            font-size: 10px;
+            font-weight: 600;
+
+            letter-spacing: 0.08em;
+
+            text-transform: uppercase;
+
+            color: var(--ink-faint);
+
+            margin: 14px 0 6px;
+        }
+
+        .rail-group:first-of-type {
+            margin-top: 0;
+        }
+
+        .rail-item {
+            font-family: var(--font-main);
+
+            font-size: 12.5px;
+
+            color: var(--ink-soft);
+
+            padding: 8px 10px;
+
+            border-radius: 3px;
+
+            cursor: pointer;
+
+            transition:
+                background .15s ease,
+                color .15s ease;
+        }
+
+        .rail-item:hover {
+            background: var(--paper-raised);
+
+            color: var(--ink);
+        }
+
+        .rail-item.active {
+            background: var(--active-nav);
+
+            color: var(--ink);
+
+            font-weight: 600;
+        }
+
+        .dash-card {
+            flex: 1;
+
+            min-width: 0;
+
+            background: var(--paper-raised);
+
+            overflow: hidden;
+        }
+
+        .dash-bar {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            padding: 14px 22px;
+
+            border-bottom: 1px solid var(--rule);
+
+            font-family: var(--font-main);
+
+            font-size: 11px;
+
+            font-weight: 600;
+
+            letter-spacing: 0.05em;
+
+            color: var(--ink-faint);
+        }
+
+        .dash-dots {
+            display: flex;
+
+            gap: 6px;
+        }
+
+        .dash-dots span {
+            width: 8px;
+            height: 8px;
+
+            border-radius: 50%;
+
+            background: var(--rule);
+        }
+
+        .stat-grid {
+            display: grid;
+
+            grid-template-columns: repeat(4, 1fr);
+
+            border-bottom: 1px solid var(--rule);
+        }
+
+        @media (max-width:700px) {
+
+            .stat-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+        }
+
+        .stat-cell {
+            padding: 24px 22px;
+
+            border-right: 1px solid var(--rule);
+        }
+
+        .stat-cell:last-child {
+            border-right: none;
+        }
+
+        .stat-cell .s-label {
+            font-family: var(--font-main);
+
+            font-size: 11px;
+
+            font-weight: 600;
+
+            letter-spacing: 0.06em;
+
+            text-transform: uppercase;
+
+            color: var(--ink-faint);
+
+            margin-bottom: 8px;
+        }
+
+        .stat-cell .s-value {
+            font-family: var(--font-main);
+
+            font-weight: 600;
+
+            font-size: 28px;
+
+            letter-spacing: -0.025em;
+        }
+
+        .dash-lower {
+            display: grid;
+
+            grid-template-columns: 1.3fr 1fr;
+        }
+
+        @media (max-width:700px) {
+
+            .dash-lower {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+        .cat-bars {
+            padding: 22px;
+
+            border-right: 1px solid var(--rule);
+        }
+
+        @media (max-width:700px) {
+
+            .cat-bars {
+                border-right: none;
+
+                border-bottom: 1px solid var(--rule);
+            }
+
+        }
+
+        .cat-bars .s-label,
+        .recent-list .s-label {
+            font-family: var(--font-main);
+
+            font-size: 11px;
+
+            font-weight: 600;
+
+            letter-spacing: 0.06em;
+
+            text-transform: uppercase;
+
+            color: var(--ink-faint);
+
+            margin-bottom: 14px;
+        }
+
+        .cat-bar-row {
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+
+            margin-bottom: 12px;
+
+            font-family: var(--font-main);
+
+            font-size: 12.5px;
+        }
+
+        .cat-bar-row .cb-label {
+            width: 96px;
+
+            flex-shrink: 0;
+
+            color: var(--ink-soft);
+        }
+
+        .cat-bar-track {
+            flex: 1;
+
+            height: 8px;
+
+            background: var(--rule);
+
+            border-radius: 4px;
+
+            overflow: hidden;
+        }
+
+        .cat-bar-fill {
+            height: 100%;
+
+            width: 0%;
+
+            border-radius: 4px;
+        }
+
+        .cat-bar-row .cb-pct {
+            width: 34px;
+
+            text-align: right;
+
+            color: var(--ink-faint);
+        }
+
+        .recent-list {
+            padding: 22px;
+        }
+
+        .recent-item {
+            display: flex;
+
+            justify-content: space-between;
+
+            font-family: var(--font-main);
+
+            font-size: 12.5px;
+
+            padding: 8px 0;
+
+            border-top: 1px dashed var(--rule);
+        }
+
+        .recent-item:first-of-type {
+            border-top: none;
+        }
+
+        .recent-item .ri-tag {
+            font-size: 10.5px;
+
+            padding: 1px 6px;
+
+            border-radius: 2px;
+
+            margin-left: 8px;
+        }
+
+
+        /* ============================================================
+   PRODUCT VALUE
+   ============================================================ */
+
+        .value-grid {
+            display: grid;
+
+            grid-template-columns: repeat(3, 1fr);
+
+            gap: 1px;
+
+            background: var(--rule);
+
+            border: 1px solid var(--rule);
+        }
+
+        .value-card {
+            background: var(--paper-raised);
+
+            padding: 30px;
+        }
+
+        .value-number {
+            display: block;
+
+            font-size: 12px;
+
+            font-weight: 600;
+
+            color: var(--brand);
+
+            margin-bottom: 28px;
+        }
+
+        .value-card h3 {
+            font-size: 20px;
+
+            font-weight: 600;
+
+            margin: 0 0 10px;
+
+            letter-spacing: -0.02em;
+        }
+
+        .value-card p {
+            margin: 0;
+
+            color: var(--ink-soft);
+
+            font-size: 14.5px;
+
+            line-height: 1.6;
+        }
+
+        @media (max-width:700px) {
+
+            .value-grid {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+
+        /* ============================================================
+   FINAL CTA
+   ============================================================ */
+
+        .final-cta {
+            text-align: left;
+        }
+
+        .final-cta .fc-inner {
+            background: var(--paper-raised);
+
+            color: var(--ink);
+
+            border: 1px solid var(--rule);
+
+            padding: 64px 48px;
+
+            border-radius: 4px;
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            gap: 32px;
+
+            flex-wrap: wrap;
+        }
+
+        .final-cta h2 {
+            font-family: var(--font-main);
+
+            font-size: clamp(26px, 3.6vw, 36px);
+
+            font-weight: 600;
+
+            letter-spacing: -0.025em;
+
+            margin: 0 0 10px;
+
+            max-width: 16ch;
+        }
+
+        .final-cta p {
+            font-family: var(--font-main);
+
+            font-size: 13px;
+
+            color: var(--ink-soft);
+
+            margin: 0;
+        }
+
+        .fc-actions {
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 10px;
+
+            align-items: flex-start;
+        }
+
+
+        /* ============================================================
+   FOOTER
+   ============================================================ */
+
+        footer {
+            padding: 32px 0 48px;
+
+            border-top: 1px solid var(--rule);
+        }
+
+        footer .wrap {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            font-family: var(--font-main);
+
+            font-size: 12px;
+
+            color: var(--ink-faint);
+
+            flex-wrap: wrap;
+
+            gap: 10px;
+        }
+
+        .footer-links {
+            display: flex;
+
+            gap: 18px;
+        }
+
+        .footer-links a {
+            text-decoration: none;
+
+            color: var(--ink-faint);
+        }
+
+        .footer-links a:hover {
+            color: var(--ink-soft);
+        }
+
+
+        /* ============================================================
+   LEGAL PANELS
+   ============================================================ */
+
+        .legal-panel {
+            position: fixed;
+
+            inset: 0;
+
+            z-index: 100;
+
+            background: rgba(4, 5, 3, 0.65);
+
+            display: flex;
+
+            align-items: flex-start;
+
+            justify-content: center;
+
+            padding: 64px 20px;
+
+            opacity: 0;
+
+            pointer-events: none;
+
+            transition: opacity .2s ease;
+
+            overflow-y: auto;
+        }
+
+        .legal-panel.open {
+            opacity: 1;
+
+            pointer-events: auto;
+        }
+
+        .legal-sheet {
+            background: var(--paper-raised);
+
+            border: 1px solid var(--rule);
+
+            max-width: 640px;
+
+            width: 100%;
+
+            padding: 36px 40px 44px;
+
+            box-shadow:
+                0 10px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .legal-sheet-head {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: flex-start;
+
+            border-bottom: 1px solid var(--rule);
+
+            padding-bottom: 18px;
+
+            margin-bottom: 22px;
+        }
+
+        .legal-sheet-head h3 {
+            font-family: var(--font-main);
+
+            font-weight: 600;
+
+            font-size: 24px;
+
+            margin: 0;
+
+            letter-spacing: -0.02em;
+        }
+
+        .legal-close {
+            font-family: var(--font-main);
+
+            font-size: 12px;
+
+            background: none;
+
+            border: 1px solid var(--rule);
+
+            border-radius: 3px;
+
+            padding: 6px 10px;
+
+            cursor: pointer;
+
+            color: var(--ink-soft);
+        }
+
+        .legal-close:hover {
+            color: var(--ink);
+
+            border-color: var(--ink-soft);
+        }
+
+
+        /* ============================================================
+   ACCESSIBILITY
+   ============================================================ */
+
+        @media (prefers-reduced-motion:reduce) {
+
+            * {
+                animation-duration: 0.001ms !important;
+                transition-duration: 0.001ms !important;
+            }
+
+        }
+    </style>
+</head>
+
+
+<body>
+
+
+    <!-- ============================================================
+     TOP NAVIGATION
+     ============================================================ -->
+
+    <nav class="top">
+
+        <div class="wrap">
+
+            <div class="wordmark">
+
+                <span class="dot"></span>
+
+                SmartSpend
+
+            </div>
+
+
+            <div class="main-nav">
+
+                <a href="#features" data-section="features">
+                    Features
+                </a>
+
+                <a href="#budget" data-section="budget">
+                    Budget
+                </a>
+
+                <a href="#dashboard" data-section="dashboard">
+                    Dashboard
+                </a>
+
+            </div>
+
+
+            <div class="auth-actions">
+
+                <button type="button" class="btn ghost">
+                    Log in
+                </button>
+
+                <button type="button" class="btn primary">
+                    Sign up
+                </button>
+
+            </div>
+
+        </div>
+
+    </nav>
+
+
+    <!-- ============================================================
+     HERO
+     ============================================================ -->
+
+    <header class="hero">
+
+        <div class="wrap hero-grid">
+
+
+            <div>
+
+                <div class="eyebrow-line">
+
+                    <span class="rule"></span>
+
+                    SMARTER EXPENSE MANAGEMENT
+
+                </div>
+
+
+                <h1>
+                    Every expense,
+                    <em>read and sorted</em>
+                    before you finish typing it.
+                </h1>
+
+
+                <p class="hero-sub">
+
+                    SmartSpend categorizes what you spend the moment you log it,
+                    shows how confident the prediction is, and turns everyday
+                    expenses into clearer spending insights.
+
+                </p>
+
+
+                <div class="hero-cta">
+
+                    <a class="btn primary" href="http://localhost:8501">
+                        Get Started
+                    </a>
+
+
+                    <a class="btn" href="#features">
+                        See how it works
+                    </a>
+
+                </div>
+
+            </div>
+
+
+            <!-- RECEIPT DEMO -->
+
+            <div class="receipt" id="receipt">
+
+                <div class="receipt-head">
+
+                    <span>
+                        SMARTSPEND · NEW ENTRY
+                    </span>
+
+                    <span id="receipt-date"></span>
+
+                </div>
+
+
+                <div class="receipt-label">
+                    Description
+                </div>
+
+
+                <input id="desc-input" type="text" placeholder="e.g. Uber ride to the airport" autocomplete="off"
+                    spellcheck="false">
+
+
+                <div class="presets" id="presets"></div>
+
+
+                <div class="result-row">
+
+                    <span>
+                        Predicted category
+                    </span>
+
+                    <span class="leader"></span>
+
+                    <span id="cat-value">
+
+                        <span class="swatch" id="cat-swatch"></span>
+
+                        <span id="cat-text">
+                            —
+                        </span>
+
+                    </span>
+
+                </div>
+
+
+                <div class="result-row">
+
+                    <span>
+                        Confidence
+                    </span>
+
+                    <span class="leader"></span>
+
+                    <span id="conf-value">
+                        —
+                    </span>
+
+                </div>
+
+
+                <div class="confidence-track">
+
+                    <div class="confidence-fill" id="conf-fill"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <!-- ============================================================
+     FEATURES
+     ============================================================ -->
+
+    <section id="features">
+
+        <div class="wrap">
+
+            <div class="section-head">
+
+                <h2>
+                    What SmartSpend actually does with a receipt
+                </h2>
+
+                <p>
+                    Five categories, an editable record, and a memory of what
+                    you've deleted. The mechanics of a real ledger, automated.
+                </p>
+
+            </div>
+
+
+            <div class="ledger">
+
+
+                <div class="ledger-row" data-row>
+
+                    <div class="lr-title">
+
+                        <span class="lr-num">
+                            01
+                        </span>
+
+                        AI categorization
+
+                    </div>
+
+
+                    <div class="lr-body">
+
+                        <p>
+
+                            A supervised model reads each description and predicts
+                            its category, with a confidence score attached to every
+                            prediction. You can see when it is guessing and when
+                            it is sure.
+
+                        </p>
+
+
+                        <div class="lr-tags">
+
+                            <span class="lr-tag">
+
+                                <span class="swatch" style="background:var(--cat-food)"></span>
+
+                                Food
+
+                            </span>
+
+
+                            <span class="lr-tag">
+
+                                <span class="swatch" style="background:var(--cat-transport)"></span>
+
+                                Transport
+
+                            </span>
+
+
+                            <span class="lr-tag">
+
+                                <span class="swatch" style="background:var(--cat-education)"></span>
+
+                                Education
+
+                            </span>
+
+
+                            <span class="lr-tag">
+
+                                <span class="swatch" style="background:var(--cat-shopping)"></span>
+
+                                Shopping
+
+                            </span>
+
+
+                            <span class="lr-tag">
+
+                                <span class="swatch" style="background:var(--cat-entertainment)"></span>
+
+                                Entertainment
+
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ledger-row" data-row>
+
+                    <div class="lr-title">
+
+                        <span class="lr-num">
+                            02
+                        </span>
+
+                        Expense management
+
+                    </div>
+
+
+                    <div class="lr-body">
+
+                        <p>
+
+                            Add, search, and filter expenses. Edit a description
+                            and the category re-predicts itself automatically.
+                            Delete an entry and it sits in recovery for a limited
+                            window before it is gone for good.
+
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ledger-row" data-row>
+
+                    <div class="lr-title">
+
+                        <span class="lr-num">
+                            03
+                        </span>
+
+                        Regular vs. essential
+
+                    </div>
+
+
+                    <div class="lr-body">
+
+                        <p>
+
+                            Not every cost reflects a habit. Prescription glasses,
+                            an emergency repair, an urgent medical bill: mark them
+                            essential and they stop counting against your normal
+                            monthly budget.
+
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ledger-row" data-row>
+
+                    <div class="lr-title">
+
+                        <span class="lr-num">
+                            04
+                        </span>
+
+                        Budget tracking
+
+                    </div>
+
+
+                    <div class="lr-body">
+
+                        <p>
+
+                            Set a monthly number. SmartSpend tracks regular spending
+                            against it, estimates where you will land by month-end,
+                            and flags a projected overage before it happens.
+
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ledger-row" data-row>
+
+                    <div class="lr-title">
+
+                        <span class="lr-num">
+                            05
+                        </span>
+
+                        Spending analytics
+
+                    </div>
+
+
+                    <div class="lr-body">
+
+                        <p>
+
+                            Today, this week, this month, the last six months,
+                            this year. Weekly patterns, month-to-month comparisons,
+                            and a plain-language read on what changed.
+
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ============================================================
+     ESSENTIAL / REGULAR
+     ============================================================ -->
+
+    <section id="essential-split">
+
+        <div class="wrap">
+
+            <div class="section-head">
+
+                <h2>
+                    Two kinds of spending, kept apart
+                </h2>
+
+                <p>
+
+                    Regular spending is the habit. Essential spending is the
+                    exception. SmartSpend never lets one distort the other.
+
+                </p>
+
+            </div>
+
+
+            <div class="split-panel">
+
+
+                <div class="split-cell">
+
+                    <h3>
+                        Regular spending
+                    </h3>
+
+                    <p>
+
+                        Selected by default on every new entry. This is what
+                        counts toward your monthly budget and what your analytics
+                        measure week to week.
+
+                    </p>
+
+
+                    <ul>
+
+                        <li>
+                            Counts toward monthly budget usage
+                        </li>
+
+                        <li>
+                            Drives spending alerts and projections
+                        </li>
+
+                        <li>
+                            Shown in category and trend analytics
+                        </li>
+
+                    </ul>
+
+                </div>
+
+
+                <div class="split-cell">
+
+                    <h3>
+                        Essential / unexpected
+                    </h3>
+
+                    <p>
+
+                        For the costs you did not choose: an emergency repair,
+                        an urgent prescription. Marked explicitly, shown separately.
+
+                    </p>
+
+
+                    <ul>
+
+                        <li>
+                            Excluded from normal budget usage
+                        </li>
+
+                        <li>
+                            Flagged in the expense table and filters
+                        </li>
+
+                        <li>
+                            Broken out on its own in the dashboard
+                        </li>
+
+                    </ul>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ============================================================
+     BUDGET
+     ============================================================ -->
+
+    <section id="budget">
+
+        <div class="wrap">
+
+            <div class="section-head">
+
+                <h2>
+                    Drag to see your budget status change
+                </h2>
+
+                <p>
+
+                    Four states, one number apart: on track, watch spending,
+                    near limit, over budget.
+
+                </p>
+
+            </div>
+
+
+            <div class="gauge-panel">
+
+
+                <div class="gauge-card">
+
+                    <div class="status-badge" id="status-badge">
+                        On track
+                    </div>
+
+
+                    <div class="gauge-track">
+
+                        <div class="gauge-fill" id="gauge-fill"></div>
+
+                    </div>
+
+
+                    <div class="gauge-scale">
+
+                        <span>
+                            0%
+                        </span>
+
+                        <span>
+                            50%
+                        </span>
+
+                        <span>
+                            100%
+                        </span>
+
+                        <span>
+                            150%
+                        </span>
+
+                    </div>
+
+
+                    <input type="range" id="budget-slider" min="0" max="150" value="42"
+                        aria-label="Simulated budget usage percentage">
+
+
+                    <div class="fig-rows">
+
+
+                        <div class="fig-row">
+
+                            <span class="fr-label">
+                                Monthly budget
+                            </span>
+
+                            <span class="leader"></span>
+
+                            <span class="fr-value">
+                                $1,200.00
+                            </span>
+
+                        </div>
+
+
+                        <div class="fig-row">
+
+                            <span class="fr-label">
+                                Regular spending
+                            </span>
+
+                            <span class="leader"></span>
+
+                            <span class="fr-value" id="fig-spent">
+                                $504.00
+                            </span>
+
+                        </div>
+
+
+                        <div class="fig-row">
+
+                            <span class="fr-label">
+                                Remaining budget
+                            </span>
+
+                            <span class="leader"></span>
+
+                            <span class="fr-value" id="fig-remaining">
+                                $696.00
+                            </span>
+
+                        </div>
+
+
+                        <div class="fig-row">
+
+                            <span class="fr-label">
+                                Est. month-end spending
+                            </span>
+
+                            <span class="leader"></span>
+
+                            <span class="fr-value" id="fig-estimate">
+                                $1,080.00
+                            </span>
+
+                        </div>
+
+
+                        <div class="fig-row">
+
+                            <span class="fr-label">
+                                Projected overage
+                            </span>
+
+                            <span class="leader"></span>
+
+                            <span class="fr-value" id="fig-overage">
+                                —
+                            </span>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <div class="gauge-copy">
+
+                    <p>
+
+                        SmartSpend compares your regular spending with your monthly
+                        budget, estimates where your spending is heading, and
+                        highlights potential overages before they become difficult
+                        to manage.
+
+                    </p>
+
+
+                    <div class="gauge-legend">
+
+                        <div class="leg-item">
+
+                            <span class="leg-swatch" style="background:var(--status-good)"></span>
+
+                            On track: under 60% of budget
+
+                        </div>
+
+
+                        <div class="leg-item">
+
+                            <span class="leg-swatch" style="background:var(--status-watch)"></span>
+
+                            Watch spending: 60 to 85%
+
+                        </div>
+
+
+                        <div class="leg-item">
+
+                            <span class="leg-swatch" style="background:var(--status-near)"></span>
+
+                            Near limit: 85 to 100%
+
+                        </div>
+
+
+                        <div class="leg-item">
+
+                            <span class="leg-swatch" style="background:var(--status-over)"></span>
+
+                            Over budget: past 100%
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ============================================================
+     DASHBOARD PREVIEW
+     ============================================================ -->
+
+    <section id="dashboard">
+
+        <div class="wrap">
+
+            <div class="section-head">
+
+                <h2>
+                    One dashboard, the whole month at once
+                </h2>
+
+                <p>
+
+                    See your spending at a glance with key totals, category
+                    breakdowns, budget progress, and recent activity in one place.
+
+                </p>
+
+            </div>
+
+
+            <div class="app-frame" id="app-frame">
+
+
+                <div class="app-rail">
+
+                    <div class="rail-word">
+                        SmartSpend
+                    </div>
+
+
+                    <div class="rail-group">
+                        Main
+                    </div>
+
+
+                    <div class="rail-item active">
+                        Dashboard
+                    </div>
+
+                    <div class="rail-item">
+                        Add Expense
+                    </div>
+
+                    <div class="rail-item">
+                        Expenses
+                    </div>
+
+                    <div class="rail-item">
+                        Analytics
+                    </div>
+
+                    <div class="rail-item">
+                        Budget
+                    </div>
+
+
+                    <div class="rail-group">
+                        Manage
+                    </div>
+
+
+                    <div class="rail-item">
+                        Recently Deleted
+                    </div>
+
+
+                    <div class="rail-group">
+                        Legal
+                    </div>
+
+
+                    <div class="rail-item" data-open-panel="privacy-panel">
+                        Privacy Policy
+                    </div>
+
+                </div>
+
+
+                <div class="dash-card">
+
+
+                    <div class="dash-bar">
+
+                        <span>
+                            SMARTSPEND DASHBOARD · PREVIEW
+                        </span>
+
+                        <div class="dash-dots">
+
+                            <span></span>
+                            <span></span>
+                            <span></span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="stat-grid">
+
+
+                        <div class="stat-cell">
+
+                            <div class="s-label">
+                                Total spending
+                            </div>
+
+                            <div class="s-value" data-count="2340" data-prefix="$">
+                                $0
+                            </div>
+
+                        </div>
+
+
+                        <div class="stat-cell">
+
+                            <div class="s-label">
+                                Number of expenses
+                            </div>
+
+                            <div class="s-value" data-count="47">
+                                0
+                            </div>
+
+                        </div>
+
+
+                        <div class="stat-cell">
+
+                            <div class="s-label">
+                                Average expense
+                            </div>
+
+                            <div class="s-value" data-count="49.79" data-prefix="$" data-decimals="2">
+                                $0.00
+                            </div>
+
+                        </div>
+
+
+                        <div class="stat-cell">
+
+                            <div class="s-label">
+                                Budget usage
+                            </div>
+
+                            <div class="s-value" data-count="68" data-suffix="%">
+                                0%
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+
+                    <div class="dash-lower">
+
+
+                        <div class="cat-bars">
+
+                            <div class="s-label">
+                                Spending by category
+                            </div>
+
+
+                            <div class="cat-bar-row">
+
+                                <span class="cb-label">
+                                    Food
+                                </span>
+
+                                <div class="cat-bar-track">
+
+                                    <div class="cat-bar-fill" data-width="38" style="background:var(--cat-food)"></div>
+
+                                </div>
+
+                                <span class="cb-pct">
+                                    38%
+                                </span>
+
+                            </div>
+
+
+                            <div class="cat-bar-row">
+
+                                <span class="cb-label">
+                                    Shopping
+                                </span>
+
+                                <div class="cat-bar-track">
+
+                                    <div class="cat-bar-fill" data-width="24" style="background:var(--cat-shopping)">
+                                    </div>
+
+                                </div>
+
+                                <span class="cb-pct">
+                                    24%
+                                </span>
+
+                            </div>
+
+
+                            <div class="cat-bar-row">
+
+                                <span class="cb-label">
+                                    Transport
+                                </span>
+
+                                <div class="cat-bar-track">
+
+                                    <div class="cat-bar-fill" data-width="19" style="background:var(--cat-transport)">
+                                    </div>
+
+                                </div>
+
+                                <span class="cb-pct">
+                                    19%
+                                </span>
+
+                            </div>
+
+
+                            <div class="cat-bar-row">
+
+                                <span class="cb-label">
+                                    Entertainment
+                                </span>
+
+                                <div class="cat-bar-track">
+
+                                    <div class="cat-bar-fill" data-width="12"
+                                        style="background:var(--cat-entertainment)"></div>
+
+                                </div>
+
+                                <span class="cb-pct">
+                                    12%
+                                </span>
+
+                            </div>
+
+
+                            <div class="cat-bar-row">
+
+                                <span class="cb-label">
+                                    Education
+                                </span>
+
+                                <div class="cat-bar-track">
+
+                                    <div class="cat-bar-fill" data-width="7" style="background:var(--cat-education)">
+                                    </div>
+
+                                </div>
+
+                                <span class="cb-pct">
+                                    7%
+                                </span>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="recent-list">
+
+                            <div class="s-label">
+                                Recent expenses
+                            </div>
+
+
+                            <div class="recent-item">
+
+                                <span>
+                                    Trader Joe's
+                                </span>
+
+                                <span>
+                                    $34.20
+                                </span>
+
+                            </div>
+
+
+                            <div class="recent-item">
+
+                                <span>
+                                    Metro card
+                                </span>
+
+                                <span>
+                                    $25.00
+                                </span>
+
+                            </div>
+
+
+                            <div class="recent-item">
+
+                                <span>
+
+                                    Emergency dental visit
+
+                                    <span class="ri-tag" style="
+                    background:
+                    color-mix(
+                      in srgb,
+                      var(--status-over) 24%,
+                      transparent
+                    );
+                    color:var(--status-over);
+                  ">
+                                        essential
+                                    </span>
+
+                                </span>
+
+                                <span>
+                                    $210.00
+                                </span>
+
+                            </div>
+
+
+                            <div class="recent-item">
+
+                                <span>
+                                    Spotify
+                                </span>
+
+                                <span>
+                                    $10.99
+                                </span>
+
+                            </div>
+
+
+                            <div class="recent-item">
+
+                                <span>
+                                    Course materials
+                                </span>
+
+                                <span>
+                                    $58.40
+                                </span>
+
+                            </div>
+
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ============================================================
+     PRODUCT VALUE
+     ============================================================ -->
+
+    <section>
+
+        <div class="wrap">
+
+            <div class="section-head">
+
+                <h2>
+                    Designed around the way you actually spend
+                </h2>
+
+                <p>
+
+                    SmartSpend brings categorization, budgeting, expense
+                    management, and spending insights together in one focused
+                    experience.
+
+                </p>
+
+            </div>
+
+
+            <div class="value-grid">
+
+
+                <div class="value-card">
+
+                    <span class="value-number">
+                        01
+                    </span>
+
+                    <h3>
+                        Understand
+                    </h3>
+
+                    <p>
+
+                        Know where your money is going with clear categories,
+                        totals, and spending patterns.
+
+                    </p>
+
+                </div>
+
+
+                <div class="value-card">
+
+                    <span class="value-number">
+                        02
+                    </span>
+
+                    <h3>
+                        Track
+                    </h3>
+
+                    <p>
+
+                        Keep your expenses organized and make changes without
+                        losing control of your records.
+
+                    </p>
+
+                </div>
+
+
+                <div class="value-card">
+
+                    <span class="value-number">
+                        03
+                    </span>
+
+                    <h3>
+                        Plan
+                    </h3>
+
+                    <p>
+
+                        Use budgets and projections to understand your spending
+                        before the month gets away from you.
+
+                    </p>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ============================================================
+     FINAL CTA
+     ============================================================ -->
+
+    <section class="final-cta">
+
+        <div class="wrap">
+
+            <div class="fc-inner">
+
+                <div>
+
+                    <h2>
+                        Make every expense easier to understand.
+                    </h2>
+
+                    <p>
+                        Turn everyday spending into clearer decisions.
+                    </p>
+
+                </div>
+
+
+                <div class="fc-actions">
+
+                    <a class="btn primary" href="#dashboard">
+                        Explore SmartSpend
+                    </a>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ============================================================
+     FOOTER
+     ============================================================ -->
+
+    <footer>
+
+        <div class="wrap">
+
+            <span>
+                SmartSpend
+            </span>
+
+
+            <div class="footer-links">
+
+                <a href="#" data-open-panel="privacy-panel">
+                    Privacy Policy
+                </a>
+
+
+                <a href="#" data-open-panel="terms-panel">
+                    Terms & Conditions
+                </a>
+
+            </div>
+
+        </div>
+
+    </footer>
+
+
+    <!-- ============================================================
+     PRIVACY POLICY
+     EMPTY FOR NOW
+     ============================================================ -->
+
+    <div class="legal-panel" id="privacy-panel">
+
+        <div class="legal-sheet">
+
+            <div class="legal-sheet-head">
+
+                <h3>
+                    Privacy Policy
+                </h3>
+
+
+                <button class="legal-close" type="button" data-close-panel>
+                    Close
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================================================
+     TERMS
+     EMPTY FOR NOW
+     ============================================================ -->
+
+    <div class="legal-panel" id="terms-panel">
+
+        <div class="legal-sheet">
+
+            <div class="legal-sheet-head">
+
+                <h3>
+                    Terms & Conditions
+                </h3>
+
+
+                <button class="legal-close" type="button" data-close-panel>
+                    Close
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        (function () {
+
+
+            /* ============================================================
+               DATE
+               ============================================================ */
+
+            var dateElement =
+                document.getElementById(
+                    'receipt-date'
+                );
+
+            var date =
+                new Date();
+
+            dateElement.textContent =
+                date.toLocaleDateString(
+                    undefined,
+                    {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    }
+                );
+
+
+            /* ============================================================
+               CATEGORY COLORS
+               ============================================================ */
+
+            var CAT_COLORS = {
+
+                Food:
+                    'var(--cat-food)',
+
+                Transport:
+                    'var(--cat-transport)',
+
+                Education:
+                    'var(--cat-education)',
+
+                Shopping:
+                    'var(--cat-shopping)',
+
+                Entertainment:
+                    'var(--cat-entertainment)'
+
+            };
+
+
+            /* ============================================================
+               DEMO CLASSIFIER
+               ============================================================ */
+
+            var LEXICON = {
+
+                Food: [
+                    'coffee',
+                    'lunch',
+                    'dinner',
+                    'breakfast',
+                    'grocery',
+                    'groceries',
+                    'restaurant',
+                    'pizza',
+                    'snack',
+                    'cafe',
+                    'takeout',
+                    'meal',
+                    'sushi',
+                    'burger',
+                    'starbucks',
+                    'bakery',
+                    'diner',
+                    'brunch'
+                ],
+
+                Transport: [
+                    'uber',
+                    'taxi',
+                    'bus',
+                    'train',
+                    'fuel',
+                    'gas',
+                    'petrol',
+                    'parking',
+                    'metro',
+                    'flight',
+                    'cab',
+                    'lyft',
+                    'airport',
+                    'toll',
+                    'ride',
+                    'subway'
+                ],
+
+                Education: [
+                    'tuition',
+                    'book',
+                    'textbook',
+                    'course',
+                    'class',
+                    'workshop',
+                    'university',
+                    'school',
+                    'exam',
+                    'lecture',
+                    'materials',
+                    'study'
+                ],
+
+                Shopping: [
+                    'amazon',
+                    'clothes',
+                    'clothing',
+                    'shoes',
+                    'mall',
+                    'store',
+                    'purchase',
+                    'electronics',
+                    'gadget',
+                    'jacket',
+                    'zara',
+                    'online',
+                    'order'
+                ],
+
+                Entertainment: [
+                    'movie',
+                    'netflix',
+                    'concert',
+                    'game',
+                    'spotify',
+                    'cinema',
+                    'show',
+                    'bar',
+                    'party',
+                    'ticket',
+                    'streaming',
+                    'festival'
+                ]
+
+            };
+
+
+            function classify(text) {
+
+                var t =
+                    text.toLowerCase();
+
+                var scores = {
+
+                    Food: 0,
+                    Transport: 0,
+                    Education: 0,
+                    Shopping: 0,
+                    Entertainment: 0
+
+                };
+
+                var hits = 0;
+
+
+                Object.keys(
+                    LEXICON
+                ).forEach(
+                    function (cat) {
+
+                        LEXICON[cat].forEach(
+                            function (word) {
+
+                                if (
+                                    t.indexOf(word) !== -1
+                                ) {
+
+                                    scores[cat] += 1;
+
+                                    hits += 1;
+
+                                }
+
+                            }
+                        );
+
+                    }
+                );
+
+
+                if (hits === 0) {
+
+                    return {
+
+                        category: 'Shopping',
+
+                        confidence:
+                            38 +
+                            Math.round(
+                                Math.random() * 10
+                            )
+
+                    };
+
+                }
+
+
+                var best =
+                    'Shopping';
+
+                var bestScore =
+                    -1;
+
+
+                Object.keys(
+                    scores
+                ).forEach(
+                    function (cat) {
+
+                        if (
+                            scores[cat] > bestScore
+                        ) {
+
+                            bestScore =
+                                scores[cat];
+
+                            best =
+                                cat;
+
+                        }
+
+                    }
+                );
+
+
+                var confidence =
+                    Math.min(
+                        97,
+                        62 +
+                        bestScore * 13 +
+                        Math.round(
+                            Math.random() * 6
+                        )
+                    );
+
+
+                return {
+
+                    category: best,
+
+                    confidence: confidence
+
+                };
+
+            }
+
+
+            /* ============================================================
+               RECEIPT DEMO
+               ============================================================ */
+
+            var input =
+                document.getElementById(
+                    'desc-input'
+                );
+
+            var catText =
+                document.getElementById(
+                    'cat-text'
+                );
+
+            var catSwatch =
+                document.getElementById(
+                    'cat-swatch'
+                );
+
+            var confFill =
+                document.getElementById(
+                    'conf-fill'
+                );
+
+            var confValue =
+                document.getElementById(
+                    'conf-value'
+                );
+
+            var current = {
+                conf: 0
+            };
+
+
+            function runClassify(text) {
+
+                if (
+                    !text.trim()
+                ) {
+
+                    catText.textContent =
+                        '—';
+
+                    catSwatch.style.background =
+                        'var(--ink-faint)';
+
+                    confValue.textContent =
+                        '—';
+
+
+                    gsap.to(
+                        current,
+                        {
+
+                            conf: 0,
+
+                            duration: 0.4,
+
+                            onUpdate: function () {
+
+                                confFill.style.width =
+                                    current.conf + '%';
+
+                                confValue.textContent =
+                                    Math.round(
+                                        current.conf
+                                    ) + '%';
+
+                            }
+
+                        }
+                    );
+
+
+                    gsap.to(
+                        confFill,
+                        {
+                            width: '0%',
+                            duration: 0.4
+                        }
+                    );
+
+
+                    return;
+
+                }
+
+
+                var result =
+                    classify(text);
+
+
+                catText.textContent =
+                    result.category;
+
+
+                catSwatch.style.background =
+                    CAT_COLORS[
+                    result.category
+                    ];
+
+
+                gsap.to(
+                    current,
+                    {
+
+                        conf:
+                            result.confidence,
+
+                        duration: 0.6,
+
+                        ease: 'power2.out',
+
+                        onUpdate: function () {
+
+                            confFill.style.width =
+                                current.conf + '%';
+
+                            confValue.textContent =
+                                Math.round(
+                                    current.conf
+                                ) + '%';
+
+                        }
+
+                    }
+                );
+
+
+                gsap.fromTo(
+                    '#cat-value',
+
+                    {
+                        y: -4,
+                        opacity: 0.4
+                    },
+
+                    {
+                        y: 0,
+                        opacity: 1,
+                        duration: 0.3,
+                        ease: 'power2.out'
+                    }
+                );
+
+            }
+
+
+            var debounceTimer;
+
+
+            input.addEventListener(
+                'input',
+                function () {
+
+                    clearTimeout(
+                        debounceTimer
+                    );
+
+                    var value =
+                        input.value;
+
+
+                    debounceTimer =
+                        setTimeout(
+                            function () {
+
+                                runClassify(
+                                    value
+                                );
+
+                            },
+                            180
+                        );
+
+                }
+            );
+
+
+            /* ============================================================
+               PRESET CHIPS
+               ============================================================ */
+
+            var PRESETS = [
+
+                'Starbucks coffee run',
+
+                'Uber to the airport',
+
+                'Chemistry textbook',
+
+                'New jacket from Zara',
+
+                'Movie tickets'
+
+            ];
+
+
+            var presetsEl =
+                document.getElementById(
+                    'presets'
+                );
+
+
+            PRESETS.forEach(
+                function (preset) {
+
+                    var chip =
+                        document.createElement(
+                            'button'
+                        );
+
+
+                    chip.className =
+                        'preset-chip';
+
+                    chip.type =
+                        'button';
+
+                    chip.textContent =
+                        preset;
+
+
+                    chip.addEventListener(
+                        'click',
+                        function () {
+
+                            input.value =
+                                preset;
+
+                            runClassify(
+                                preset
+                            );
+
+                        }
+                    );
+
+
+                    presetsEl.appendChild(
+                        chip
+                    );
+
+                }
+            );
+
+
+            /* ============================================================
+               AUTO DEMO
+               ============================================================ */
+
+            window.addEventListener(
+                'load',
+                function () {
+
+                    setTimeout(
+                        function () {
+
+                            input.value =
+                                PRESETS[0];
+
+                            runClassify(
+                                PRESETS[0]
+                            );
+
+                        },
+                        500
+                    );
+
+                }
+            );
+
+
+            /* ============================================================
+               BUDGET GAUGE
+               ============================================================ */
+
+            var slider =
+                document.getElementById(
+                    'budget-slider'
+                );
+
+            var gaugeFill =
+                document.getElementById(
+                    'gauge-fill'
+                );
+
+            var statusBadge =
+                document.getElementById(
+                    'status-badge'
+                );
+
+            var figSpent =
+                document.getElementById(
+                    'fig-spent'
+                );
+
+            var figRemaining =
+                document.getElementById(
+                    'fig-remaining'
+                );
+
+            var figEstimate =
+                document.getElementById(
+                    'fig-estimate'
+                );
+
+            var figOverage =
+                document.getElementById(
+                    'fig-overage'
+                );
+
+
+            var BUDGET =
+                1200;
+
+            var DAY_OF_MONTH_FRACTION =
+                0.42;
+
+
+            function fmt(n) {
+
+                return '$' +
+                    n.toLocaleString(
+                        undefined,
+                        {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        }
+                    );
+
+            }
+
+
+            function updateGauge(
+                pct,
+                animate
+            ) {
+
+                var spent =
+                    BUDGET * (
+                        pct / 100
+                    );
+
+
+                var remaining =
+                    BUDGET -
+                    spent;
+
+
+                var estimate =
+                    spent /
+                    DAY_OF_MONTH_FRACTION;
+
+
+                var overage =
+                    estimate -
+                    BUDGET;
+
+
+                var color;
+                var label;
+
+
+                if (pct < 60) {
+
+                    color =
+                        'var(--status-good)';
+
+                    label =
+                        'On track';
+
+                }
+
+                else if (pct < 85) {
+
+                    color =
+                        'var(--status-watch)';
+
+                    label =
+                        'Watch spending';
+
+                }
+
+                else if (pct <= 100) {
+
+                    color =
+                        'var(--status-near)';
+
+                    label =
+                        'Near limit';
+
+                }
+
+                else {
+
+                    color =
+                        'var(--status-over)';
+
+                    label =
+                        'Over budget';
+
+                }
+
+
+                var duration =
+                    animate
+                        ? 0.35
+                        : 0;
+
+
+                gsap.to(
+                    gaugeFill,
+                    {
+
+                        width:
+                            (
+                                Math.min(
+                                    pct,
+                                    150
+                                ) / 150
+                            ) * 100 + '%',
+
+                        backgroundColor:
+                            color,
+
+                        duration:
+                            duration,
+
+                        ease: 'power2.out'
+
+                    }
+                );
+
+
+                statusBadge.textContent =
+                    label;
+
+
+                statusBadge.style.color =
+                    color;
+
+
+                statusBadge.style.background =
+                    'color-mix(in srgb, ' +
+                    color +
+                    ' 22%, transparent)';
+
+
+                figSpent.textContent =
+                    fmt(spent);
+
+
+                figRemaining.textContent =
+                    remaining >= 0
+                        ? fmt(remaining)
+                        : '-' +
+                        fmt(
+                            Math.abs(
+                                remaining
+                            )
+                        );
+
+
+                figRemaining.className =
+                    'fr-value' +
+                    (
+                        remaining < 0
+                            ? ' neg'
+                            : ''
+                    );
+
+
+                figEstimate.textContent =
+                    fmt(estimate);
+
+
+                if (overage > 0) {
+
+                    figOverage.textContent =
+                        fmt(overage) +
+                        ' over';
+
+                    figOverage.className =
+                        'fr-value neg';
+
+                }
+
+                else {
+
+                    figOverage.textContent =
+                        'none projected';
+
+                    figOverage.className =
+                        'fr-value';
+
+                }
+
+            }
+
+
+            slider.addEventListener(
+                'input',
+                function () {
+
+                    updateGauge(
+                        parseFloat(
+                            slider.value
+                        ),
+                        true
+                    );
+
+                }
+            );
+
+
+            updateGauge(
+                parseFloat(
+                    slider.value
+                ),
+                false
+            );
+
+
+            /* ============================================================
+               GSAP
+               ============================================================ */
+
+            gsap.registerPlugin(
+                ScrollTrigger
+            );
+
+
+            /* ============================================================
+               DASHBOARD COUNTERS
+               ============================================================ */
+
+            document
+                .querySelectorAll(
+                    '[data-count]'
+                )
+                .forEach(
+                    function (el) {
+
+                        var target =
+                            parseFloat(
+                                el.getAttribute(
+                                    'data-count'
+                                )
+                            );
+
+
+                        var prefix =
+                            el.getAttribute(
+                                'data-prefix'
+                            ) || '';
+
+
+                        var suffix =
+                            el.getAttribute(
+                                'data-suffix'
+                            ) || '';
+
+
+                        var decimals =
+                            parseInt(
+                                el.getAttribute(
+                                    'data-decimals'
+                                ) || '0',
+                                10
+                            );
+
+
+                        var obj = {
+                            val: 0
+                        };
+
+
+                        ScrollTrigger.create({
+
+                            trigger: el,
+
+                            start: 'top 85%',
+
+                            once: true,
+
+                            onEnter: function () {
+
+                                gsap.to(
+                                    obj,
+                                    {
+
+                                        val:
+                                            target,
+
+                                        duration:
+                                            1.3,
+
+                                        ease:
+                                            'power2.out',
+
+                                        onUpdate: function () {
+
+                                            var value =
+                                                obj.val.toFixed(
+                                                    decimals
+                                                );
+
+
+                                            var withComma;
+
+
+                                            if (
+                                                decimals === 0
+                                            ) {
+
+                                                withComma =
+                                                    Math.round(
+                                                        obj.val
+                                                    ).toLocaleString();
+
+                                            }
+
+                                            else {
+
+                                                withComma =
+                                                    Number(
+                                                        value
+                                                    ).toLocaleString(
+                                                        undefined,
+                                                        {
+                                                            minimumFractionDigits:
+                                                                decimals,
+
+                                                            maximumFractionDigits:
+                                                                decimals
+                                                        }
+                                                    );
+
+                                            }
+
+
+                                            el.textContent =
+                                                prefix +
+                                                withComma +
+                                                suffix;
+
+                                        }
+
+                                    }
+                                );
+
+                            }
+
+                        });
+
+                    }
+                );
+
+
+            /* ============================================================
+               CATEGORY BARS
+               ============================================================ */
+
+            document
+                .querySelectorAll(
+                    '.cat-bar-fill'
+                )
+                .forEach(
+                    function (el) {
+
+                        var width =
+                            el.getAttribute(
+                                'data-width'
+                            );
+
+
+                        ScrollTrigger.create({
+
+                            trigger: el,
+
+                            start: 'top 90%',
+
+                            once: true,
+
+                            onEnter: function () {
+
+                                gsap.to(
+                                    el,
+                                    {
+
+                                        width:
+                                            width + '%',
+
+                                        duration:
+                                            1,
+
+                                        ease:
+                                            'power2.out'
+
+                                    }
+                                );
+
+                            }
+
+                        });
+
+                    }
+                );
+
+
+            /* ============================================================
+               HERO ANIMATIONS
+               ============================================================ */
+
+            gsap.fromTo(
+                '.receipt',
+
+                {
+                    opacity: 0,
+                    y: 16
+                },
+
+                {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.7,
+                    ease: 'power2.out',
+                    delay: 0.15
+                }
+            );
+
+
+            gsap.fromTo(
+                'h1',
+
+                {
+                    opacity: 0,
+                    y: 10
+                },
+
+                {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.6,
+                    ease: 'power2.out'
+                }
+            );
+
+
+            /* ============================================================
+               TOP NAV SHADOW
+               ============================================================ */
+
+            var navEl =
+                document.querySelector(
+                    'nav.top'
+                );
+
+
+            ScrollTrigger.create({
+
+                start: 'top -1',
+
+                end: 99999,
+
+                onUpdate: function (self) {
+
+                    navEl.classList.toggle(
+                        'scrolled',
+                        self.scroll() > 8
+                    );
+
+                }
+
+            });
+
+
+            /* ============================================================
+               NAV ACTIVE SECTION
+               ============================================================ */
+
+            (function () {
+
+                var navLinks =
+                    Array.prototype.slice.call(
+                        document.querySelectorAll(
+                            '.main-nav a'
+                        )
+                    );
+
+
+                var sections =
+                    navLinks
+                        .map(
+                            function (link) {
+
+                                return document.querySelector(
+                                    link.getAttribute(
+                                        'href'
+                                    )
+                                );
+
+                            }
+                        )
+                        .filter(Boolean);
+
+
+                function setActive(index) {
+
+                    navLinks.forEach(
+                        function (link, i) {
+
+                            link.classList.toggle(
+                                'active',
+                                i === index
+                            );
+
+                        }
+                    );
+
+                }
+
+
+                if (
+                    'IntersectionObserver'
+                    in window
+                ) {
+
+                    var observer =
+                        new IntersectionObserver(
+
+                            function (entries) {
+
+                                entries.forEach(
+                                    function (entry) {
+
+                                        if (
+                                            entry.isIntersecting
+                                        ) {
+
+                                            var index =
+                                                sections.indexOf(
+                                                    entry.target
+                                                );
+
+
+                                            if (
+                                                index !== -1
+                                            ) {
+
+                                                setActive(
+                                                    index
+                                                );
+
+                                            }
+
+                                        }
+
+                                    }
+                                );
+
+                            },
+
+                            {
+                                rootMargin:
+                                    '-35% 0px -50% 0px',
+
+                                threshold: 0
+
+                            }
+
+                        );
+
+
+                    sections.forEach(
+                        function (section) {
+
+                            observer.observe(
+                                section
+                            );
+
+                        }
+                    );
+
+                }
+
+
+                setActive(0);
+
+            })();
+
+
+            /* ============================================================
+               FEATURE ROW REVEALS
+               ============================================================ */
+
+            gsap.utils
+                .toArray(
+                    '[data-row]'
+                )
+                .forEach(
+                    function (row) {
+
+                        gsap.fromTo(
+
+                            row,
+
+                            {
+                                opacity: 0,
+                                x: -16
+                            },
+
+                            {
+                                opacity: 1,
+                                x: 0,
+                                duration: 0.5,
+                                ease: 'power2.out',
+
+                                scrollTrigger: {
+                                    trigger: row,
+                                    start: 'top 90%',
+                                    once: true
+                                }
+
+                            }
+
+                        );
+
+                    }
+                );
+
+
+            /* ============================================================
+               ESSENTIAL SPLIT
+               ============================================================ */
+
+            gsap.fromTo(
+
+                '.split-cell',
+
+                {
+                    opacity: 0,
+                    y: 20
+                },
+
+                {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.55,
+                    ease: 'power2.out',
+                    stagger: 0.12,
+
+                    scrollTrigger: {
+                        trigger: '.split-panel',
+                        start: 'top 85%',
+                        once: true
+                    }
+
+                }
+
+            );
+
+
+            /* ============================================================
+               GAUGE ANIMATION
+               ============================================================ */
+
+            gsap.fromTo(
+
+                '.gauge-card',
+
+                {
+                    opacity: 0,
+                    x: -18
+                },
+
+                {
+                    opacity: 1,
+                    x: 0,
+                    duration: 0.6,
+                    ease: 'power2.out',
+
+                    scrollTrigger: {
+                        trigger: '.gauge-panel',
+                        start: 'top 82%',
+                        once: true
+                    }
+
+                }
+
+            );
+
+
+            gsap.fromTo(
+
+                '.gauge-copy',
+
+                {
+                    opacity: 0,
+                    x: 18
+                },
+
+                {
+                    opacity: 1,
+                    x: 0,
+                    duration: 0.6,
+                    ease: 'power2.out',
+                    delay: 0.1,
+
+                    scrollTrigger: {
+                        trigger: '.gauge-panel',
+                        start: 'top 82%',
+                        once: true
+                    }
+
+                }
+
+            );
+
+
+            /* ============================================================
+               DASHBOARD ANIMATION
+               ============================================================ */
+
+            gsap.fromTo(
+
+                '.app-frame',
+
+                {
+                    opacity: 0,
+                    y: 24,
+                    scale: 0.98
+                },
+
+                {
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
+                    duration: 0.7,
+                    ease: 'power2.out',
+
+                    scrollTrigger: {
+                        trigger: '.app-frame',
+                        start: 'top 85%',
+                        once: true
+                    }
+
+                }
+
+            );
+
+
+            /* ============================================================
+               PRODUCT VALUE ANIMATION
+               ============================================================ */
+
+            gsap.fromTo(
+
+                '.value-card',
+
+                {
+                    opacity: 0,
+                    y: 20
+                },
+
+                {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.5,
+                    ease: 'power2.out',
+                    stagger: 0.1,
+
+                    scrollTrigger: {
+                        trigger: '.value-grid',
+                        start: 'top 85%',
+                        once: true
+                    }
+
+                }
+
+            );
+
+
+            /* ============================================================
+               FINAL CTA
+               ============================================================ */
+
+            gsap.fromTo(
+
+                '.fc-inner',
+
+                {
+                    opacity: 0,
+                    y: 20
+                },
+
+                {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.6,
+                    ease: 'power2.out',
+
+                    scrollTrigger: {
+                        trigger: '.fc-inner',
+                        start: 'top 88%',
+                        once: true
+                    }
+
+                }
+
+            );
+
+
+            /* ============================================================
+               LEGAL PANELS
+               ============================================================ */
+
+            document
+                .querySelectorAll(
+                    '[data-open-panel]'
+                )
+                .forEach(
+                    function (link) {
+
+                        link.addEventListener(
+                            'click',
+                            function (event) {
+
+                                event.preventDefault();
+
+
+                                var panel =
+                                    document.getElementById(
+                                        link.getAttribute(
+                                            'data-open-panel'
+                                        )
+                                    );
+
+
+                                panel.classList.add(
+                                    'open'
+                                );
+
+
+                                document.body.style.overflow =
+                                    'hidden';
+
+                            }
+                        );
+
+                    }
+                );
+
+
+            document
+                .querySelectorAll(
+                    '[data-close-panel]'
+                )
+                .forEach(
+                    function (button) {
+
+                        button.addEventListener(
+                            'click',
+                            function () {
+
+                                var panel =
+                                    button.closest(
+                                        '.legal-panel'
+                                    );
+
+
+                                panel.classList.remove(
+                                    'open'
+                                );
+
+
+                                document.body.style.overflow =
+                                    '';
+
+                            }
+                        );
+
+                    }
+                );
+
+
+            /* ============================================================
+               ESCAPE TO CLOSE
+               ============================================================ */
+
+            document.addEventListener(
+                'keydown',
+                function (event) {
+
+                    if (
+                        event.key === 'Escape'
+                    ) {
+
+                        document
+                            .querySelectorAll(
+                                '.legal-panel.open'
+                            )
+                            .forEach(
+                                function (panel) {
+
+                                    panel.classList.remove(
+                                        'open'
+                                    );
+
+                                }
+                            );
+
+
+                        document.body.style.overflow =
+                            '';
+
+                    }
+
+                }
+            );
+
+        })();
+
+    </script>
+
+</body>
+
+</html>

@@ -3,16 +3,13 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY frontend/requirements.txt ./requirements.txt
-
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Main Streamlit application
-COPY frontend/app.py .
+# Copy EVERYTHING from the frontend folder
+COPY frontend/ ./
 
 # Streamlit theme and configuration
 COPY .streamlit .streamlit
-
-# Application assets
 
 EXPOSE 8501
 
